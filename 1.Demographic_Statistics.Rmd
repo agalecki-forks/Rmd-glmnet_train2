@@ -35,7 +35,7 @@ pacman::p_load(
   ggplot2       #Plot the results
   )  
 
-scrambled=readxl::read_excel("jnpx_scrambled_053122.xlsx", na = "", guess_max = 1000)
+scrambled=readxl::read_excel("./Data/jnpx_scrambled_053122.xlsx", na = "", guess_max = 1000)
 scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
   
 scrambled2 <- scrambled  %>% 
