@@ -27,25 +27,21 @@ pacman::p_load(
   flextable,    # format the output table
   gtsummary,    # calculate summary statistics and format the results
   sjPlot,       # correlation matrix
-  purrr,        # enhances R’s functional programming (FP) toolki 
+  purrr,        # enhances R functional programming (FP) toolki 
   tidyr,        #Tools to help to create tidy data
   ggplot2       #Plot the results
+  glmnetUtils   #
   )
 ```
 
-## Unadjusted Logistic Regression Model
+# Prepare data/matrices 
 
-```{r, Unstardized, echo=TRUE, message=FALSE, warning=FALSE}
+```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
 #read the data that is stored under the data folder
 
-####scrambled<-readRDS(file = "./Data/scrambled.rds")
+scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled=readxl::read_excel("./Data/jnpx_scrambled_053122.xlsx", na = "", guess_max = 1000)
 scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
-  
-
-#set seed to ensure reproducible results
-set.seed(46)
 
 #select variables for unadjusted model
 data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
@@ -61,23 +57,52 @@ x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx
 
 #select follow-up time and status
 y <- data.matrix(data_drop_na[,c("status")])
-
-#fit the unadjusted logistic regression model
-pfit <- glmnet(x, y, family = "binomial")
-
 ```
 
-##    - coefficient plot
-####  Unadjusted Logistic Regression Model Coefficient Plot
+# glmnet for a given $\alpha$
+
+## Fit logistic regression glmnet for a given $\alpha$
+
+* Mixing (hyper)parameter $\alpha$ by default is equal to $1$ (lasso regression)
+
+
+```{r, Unstardized, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the unadjusted(???) logistic regression model
+pfit <- glmnet(x, y, family = "binomial")
+```
+
+##  Unadjusted(???)  Logistic Regression Model Coefficient Plot
+
 ```{r, Unstardized_plot, echo=TRUE, message=FALSE, warning=FALSE}
 plot(pfit, label = TRUE) 
 ```
-"Each curve corresponds to a variable. It shows the path of its coefficient against the ?1-norm of the whole coefficient vector as ? varies. The axis above indicates the number of nonzero coefficients at the current ?, which is the effective degrees of freedom (df) for the lasso."
+"Each curve corresponds to a variable. It shows the path of its coefficient against the ${\ell}_1$-norm of the whole 
+coefficient vector as $\lambda$ varies. The axis above indicates the number of nonzero coefficients at the current $\lambda$,
+which is the effective degrees of freedom (df) for the lasso."
 
 source: ("https://glmnet.stanford.edu/articles/glmnet.html")
 
-##    - cross-validated logistic regression model
-####  Unadjusted Cross-Validated Logistic Regression Model Coefficient Plot
+
+# glmnetUtils Glmnet models for multiple alpha 
+
+* We use cross-validation to select a value for $\alpha$.
+* The idea of "explicitly control the fold" is implemented in
+`glmnetUtils` package
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+```{r glmnetUtils}
+library(glmnetUtils)
+set.seed(46)
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit <- cva.glmnet(x=x,y=y,family = "binomial",alpha = alphv)
+minlossplot(cva_pfit)
+```
+
+
+#  Cross-validation of logistic regression model (Optional)
+
+###  Unadjusted Cross-Validated Logistic Regression Model Coefficient Plot
 ```{r, Unstardized_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
 cvfit <- cv.glmnet(x, y, family = "binomial")
@@ -85,12 +110,17 @@ cvfit <- cv.glmnet(x, y, family = "binomial")
 plot(pfit, label = TRUE) 
 ```
 
-"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves along the ? sequence (error bars). Two special values along the ? sequence are indicated by the vertical dotted lines. lambda.min is the value of ? that gives minimum mean cross-validated error, while lambda.1se is the value of ? that gives the most regularized model such that the cross-validated error is within one standard error of the minimum."
+"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves
+along the $\lambda$ sequence (error bars). Two special values along the $\lambda$ sequence are indicated by the 
+vertical dotted lines. `lambda.min` is the value of $\lambda$ that gives minimum mean cross-validated error, 
+while `lambda.1se` is the value of $\lambda$ that gives the most regularized model such that the cross-validated 
+error is within one standard error of the minimum."
 
 source: ("https://glmnet.stanford.edu/articles/glmnet.html")
 
-##   - minimal lambda value
-####  Unadjusted Cross-Validated Logistic Regression Coefficients using the minimal lambda value 
+###   minimal lambda value
+
+###  Unadjusted Cross-Validated Logistic Regression Coefficients using the minimal lambda value 
 ```{r, Unstardized_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 cvfit$lambda.min
@@ -108,6 +138,7 @@ coef(cvfit)
 ```
 
 ## Adjusted Logistic Regression Model 
+
 ### Adjusted Logistic Regression Model (adjusting for Baseline HbA1c, ACR, eGFR)
 ```{r, Adjusted, echo=TRUE, message=FALSE, warning=FALSE}
 

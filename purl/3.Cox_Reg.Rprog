@@ -26,11 +26,7 @@ pacman::p_load(
 
 ## ---- Unstardized, echo=TRUE, message=FALSE, warning=FALSE--------------------
 #read the data that is stored under the data folder
-
 scrambled<-readRDS(file = "./Data/scrambled.rds")
-
-scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
-  
 
 #set seed to ensure reproducible results
 set.seed(46)
@@ -48,10 +44,10 @@ nrow(data_drop_na)
 x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")])
 
 #select follow-up time and status
-y <- data.matrix(data_drop_na[,c("status")])
+y <- data.matrix(data_drop_na[,c("time","status")])
 
-#fit the unadjusted logistic regression model
-pfit <- glmnet(x, y, family = "binomial")
+#fit the unadjusted cox model
+pfit <- glmnet(x, y, family = "cox")
 
 
 
@@ -61,7 +57,7 @@ plot(pfit, label = TRUE)
 
 ## ---- Unstardized_cv_plot, echo=TRUE, message=FALSE, warning=FALSE------------
 #fit the cross-validatedmodel
-cvfit <- cv.glmnet(x, y, family = "binomial")
+cvfit <- cv.glmnet(x, y, family = "cox")
 
 plot(pfit, label = TRUE) 
 
@@ -69,14 +65,14 @@ plot(pfit, label = TRUE)
 ## ---- Unstardized_cv_min, echo=TRUE, message=FALSE, warning=FALSE-------------
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 cvfit$lambda.min
-# Cross-validated logistic regression Model using the minimal lambda
+# Cross-validated Cox Model using the minimal lambda
 coef(cvfit, s = "lambda.min")
 
 
 ## ---- Unstardized_cv_lse, echo=TRUE, message=FALSE, warning=FALSE-------------
 #largest value of lambda such that error is within 1 standard error of the minimum.
 cvfit$lambda.lse
-# Cross-validated Logistic Regression Model using the lambda.lse
+# Cross-validated Cox Model using the lambda.lse
 coef(cvfit)
 
 
@@ -95,10 +91,10 @@ nrow(data_drop_na2)
 x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR")])
 
 #select follow-up time and status
-y2 <- data.matrix(data_drop_na2[,c("status")])
+y2 <- data.matrix(data_drop_na2[,c("time","status")])
 
-#fit the unadjusted logistic regression model
-pfit2 <- glmnet(x2, y2, family = "binomial")
+#fit the unadjusted cox model
+pfit2 <- glmnet(x2, y2, family = "cox")
 
 
 
@@ -108,7 +104,7 @@ plot(pfit2, label = TRUE)
 
 ## ---- Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE---------------
 #fit the cross-validatedmodel
-cvfit2 <- cv.glmnet(x2, y2, family = "binomial")
+cvfit2 <- cv.glmnet(x2, y2, family = "cox")
 
 plot(pfit2, label = TRUE) 
 
@@ -116,13 +112,13 @@ plot(pfit2, label = TRUE)
 ## ---- Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE----------------
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 cvfit2$lambda.min
-# Cross-validated Logistic Regression Model using the minimal lambda
+# Cross-validated Cox Model using the minimal lambda
 coef(cvfit2, s = "lambda.min")
 
 
 ## ---- Adjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----------------
 #largest value of lambda such that error is within 1 standard error of the minimum.
 cvfit2$lambda.lse
-# Cross-validated Logistic Regression Model using the lambda.lse
+# Cross-validated Cox Model using the lambda.lse
 coef(cvfit2)
 
