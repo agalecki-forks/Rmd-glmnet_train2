@@ -1,6 +1,10 @@
 # .html
 *.html
 
+# .Rprog
+*.Rprog
+save/.Rprog
+
 # History files
 .Rhistory
 .Rapp.history
