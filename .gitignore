@@ -3,7 +3,7 @@
 
 # .Rprog
 *.Rprog
-save/.Rprog
+save/.Rdata
 
 # History files
 .Rhistory
