@@ -29,13 +29,14 @@ pacman::p_load(
   sjPlot,       # correlation matrix
   purrr,        # enhances R’s functional programming (FP) toolki 
   tidyr,        #Tools to help to create tidy data
-  ggplot2       #Plot the results
+  ggplot2,       #Plot the results
+  glmnetUtils   #Glmnet models for multiple alpha
   )
 ```
 
-## Unadjusted Cox Regression Model
+# Prepare data/matrices 
 
-```{r, Unstardized, echo=TRUE, message=FALSE, warning=FALSE}
+```{r, Unstardized1, echo=TRUE, message=FALSE, warning=FALSE}
 #read the data that is stored under the data folder
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
@@ -56,23 +57,61 @@ x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx
 
 #select follow-up time and status
 y <- data.matrix(data_drop_na[,c("time","status")])
-
-#fit the unadjusted cox model
-pfit <- glmnet(x, y, family = "cox")
-
 ```
 
-##    - coefficient plot
-####  Unadjusted Cox Regression Model Coefficient Plot
+# glmnet for a given $\alpha$
+
+## Fit cox regression glmnet for a given $\alpha$
+
+* Mixing (hyper) parameter $\alpha$ by default is equal to $1$ (lasso regression)
+
+
+```{r, Unstardized2, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the unadjusted cox regression model
+pfit <- glmnet(x, y, family = "cox")
+```
+
+##  Unadjusted Cox Regression Model Coefficient Plot
+
 ```{r, Unstardized_plot, echo=TRUE, message=FALSE, warning=FALSE}
 plot(pfit, label = TRUE) 
 ```
-"Each curve corresponds to a variable. It shows the path of its coefficient against the ℓ1-norm of the whole coefficient vector as λ varies. The axis above indicates the number of nonzero coefficients at the current λ, which is the effective degrees of freedom (df) for the lasso."
+"Each curve corresponds to a variable. It shows the path of its coefficient against the ${\ell}_1$-norm of the whole 
+coefficient vector as $\lambda$ varies. The axis above indicates the number of nonzero coefficients at the current $\lambda$, 
+which is the effective degrees of freedom (df) for the lasso."
 
 source: ("https://glmnet.stanford.edu/articles/glmnet.html")
 
-##    - cross-validated cox model
-####  Unadjusted Cross-Validated Cox Regression Model Coefficient Plot
+
+# glmnetUtils Glmnet models for multiple alpha 
+
+* We use cross-validation to select a value for $\alpha$.
+* The idea of "explicitly control the fold" is implemented in
+`glmnetUtils` package
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+```{r glmnetUtils}
+
+set.seed(46)
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit <- cva.glmnet(x=x,y=y,family = "cox", alpha = alphv)
+minlossplot(cva_pfit)
+```
+
+Save cva.object for post-processing
+
+```{r save-cva_pfit}
+save(cva_pfit, file = "./save/31Cox-Reg1-save1.Rdata")
+```
+
+
+
+#  Cross-validation of cox regression model (Optional)
+
+## Unadjusted Cox Regression Model 
+##   - coefficient plot
+###  Unadjusted Cross-Validated Cox Regression Model Coefficient Plot
 ```{r, Unstardized_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
 cvfit <- cv.glmnet(x, y, family = "cox")
@@ -80,16 +119,21 @@ cvfit <- cv.glmnet(x, y, family = "cox")
 plot(pfit, label = TRUE) 
 ```
 
-"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves along the λ sequence (error bars). Two special values along the λ sequence are indicated by the vertical dotted lines. lambda.min is the value of λ that gives minimum mean cross-validated error, while lambda.1se is the value of λ that gives the most regularized model such that the cross-validated error is within one standard error of the minimum."
+"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves
+along the $\lambda$ sequence (error bars). Two special values along the $\lambda$ sequence are indicated by the 
+vertical dotted lines. `lambda.min` is the value of $\lambda$ that gives minimum mean cross-validated error, 
+while `lambda.1se` is the value of $\lambda$ that gives the most regularized model such that the cross-validated 
+error is within one standard error of the minimum."
 
 source: ("https://glmnet.stanford.edu/articles/glmnet.html")
 
 ##   - minimal lambda value
-####  Unadjusted Cross-Validated Cox Regression Coefficients using the minimal lambda value 
+
+###  Unadjusted Cross-Validated Cox Regression Coefficients using the minimal lambda value 
 ```{r, Unstardized_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 cvfit$lambda.min
-# Cross-validated Cox Model using the minimal lambda
+# Cross-validated cox regression Model using the minimal lambda
 coef(cvfit, s = "lambda.min")
 ```
 
@@ -98,11 +142,12 @@ coef(cvfit, s = "lambda.min")
 ```{r, Unstardized_cv_lse, echo=TRUE, message=FALSE, warning=FALSE}
 #largest value of lambda such that error is within 1 standard error of the minimum.
 cvfit$lambda.lse
-# Cross-validated Cox Model using the lambda.lse
+# Cross-validated Cox Regression Model using the lambda.lse
 coef(cvfit)
 ```
 
 ## Adjusted Cox Regression Model 
+
 ### Adjusted Cox Regression Model (adjusting for Baseline HbA1c, ACR, eGFR)
 ```{r, Adjusted, echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -121,7 +166,7 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.n
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])
 
-#fit the unadjusted cox model
+#fit the unadjusted cox regression model
 pfit2 <- glmnet(x2, y2, family = "cox")
 
 ```
@@ -132,7 +177,7 @@ pfit2 <- glmnet(x2, y2, family = "cox")
 plot(pfit2, label = TRUE) 
 ```
 
-##   - cross-validated cox model
+##   - cross-validated cox regression model
 ####  Adjusted Cross-Validated Cox Regression Model Coefficient Plot
 ```{r, Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
@@ -142,11 +187,11 @@ plot(pfit2, label = TRUE)
 ```
 
 ##   - minimal lambda value
-####  Adjusted Cross-Validated Cox Regression Coefficients using minimal lambda value
+####  Adjusted Cross-Validated Cox Regressionn Coefficients using minimal lambda value
 ```{r, Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 cvfit2$lambda.min
-# Cross-validated Cox Model using the minimal lambda
+# Cross-validated cox Regression Model using the minimal lambda
 coef(cvfit2, s = "lambda.min")
 ```
 
@@ -155,6 +200,6 @@ coef(cvfit2, s = "lambda.min")
 ```{r, Adjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE}
 #largest value of lambda such that error is within 1 standard error of the minimum.
 cvfit2$lambda.lse
-# Cross-validated Cox Model using the lambda.lse
+# Cross-validated Cox Regression Model using the lambda.lse
 coef(cvfit2)
 ```
