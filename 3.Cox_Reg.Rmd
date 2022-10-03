@@ -99,6 +99,29 @@ cva_pfit <- cva.glmnet(x=x,y=y,family = "cox", alpha = alphv)
 minlossplot(cva_pfit)
 ```
 
+Extract the best parameters from cva.glmnet object
+
+```{r get_best_params}
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit)
+```
+
+Cox regression coefficients using the best parameters
+
+```{r get_best_coef}
+coef(cva_pfit, s = get_model_params(cva_pfit)$lambdaMin, alpha=get_model_params(cva_pfit)$alpha)
+```
+
 Save cva.object for post-processing
 
 ```{r save-cva_pfit}
