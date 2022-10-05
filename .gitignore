@@ -1,3 +1,7 @@
+# cahe files
+*_cache/*.*
+*_files/*.*
+
 # .html
 *.html
 

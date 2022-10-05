@@ -125,6 +125,7 @@ proteins
 protein <- scrambled  %>% select(all_of(proteins))
 tab_corr(protein, p.numeric=TRUE, corr.method = c( "spearman"))
 ```
+## Cluster dendrogram for proteins
 
 ```{r Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -133,14 +134,16 @@ hcl <- hclust(as.dist(1-abs(cors)))
 plot(hcl)
 ```
 
+## Correlatio matrix heatmap
 ```{r Correlation-proteins-ord, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 60, fig.height=40}
 
 ord <- hcl$order
 cors_ord <- cors[ord,ord]
 cors_ord <- round(cors_ord,2)
-corrplot(cors_ord, type ="lower", tl.pos ="lt", diag=FALSE) # left/top
-corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3, 
-   diag=FALSE, col="black")
+corrplot.mixed(cors_ord, lower ="pie", upper="number", tl.pos ="lt",
+ mar = c(0,0,2,0), tl.cex=4, title="Correlation matrix", number.cex =3) # left/top
+#corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3, 
+#   col="black", cl.pos ="n", main="Correlation matrix")
 ```
 
 
