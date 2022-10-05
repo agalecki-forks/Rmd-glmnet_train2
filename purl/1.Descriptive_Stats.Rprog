@@ -1,8 +1,8 @@
-## ----knitr-setup, include=FALSE-----------------------------------------------
+## ----knitr-setup, include=FALSE-------------------------------------
 knitr::opts_chunk$set(echo = TRUE, comment="#>")
 
 
-## ----pacman, echo=FALSE, message=FALSE, warning=FALSE-------------------------
+## ----pacman, echo=FALSE, message=FALSE, warning=FALSE---------------
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -25,26 +25,33 @@ pacman::p_load(
   )
 
 
-## ----rsetup-------------------------------------------------------------------
+## ----rsetup---------------------------------------------------------
 sessionInfo()
 
 
-## ---- data-read, echo=FALSE, message=FALSE, warning=FALSE---------------------
+## ---- data-read, echo=FALSE, message=FALSE, warning=FALSE-----------
 xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
 
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
 
 
-## ----var-names----------------------------------------------------------------
+## ----var-names------------------------------------------------------
 names(scrambled_orig)
 
 
-## ---- table1, echo=FALSE, message=FALSE, warning=FALSE------------------------
+## ---- table1, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE----
 scrambled2 <- scrambled  %>% 
           mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
-          Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Non-case"))%>%                                select(-INDEX,-SEX,-CASE_CONTROL) %>%
-          select("Gender","Status","Death" , "FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")         
+              Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Non-case"))%>%                                
+          select(-INDEX,-SEX,-CASE_CONTROL) %>%
+          select("Gender","Status","Death" , "FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , 
+                 "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", 
+                 "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx",
+                 "WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", 
+                 "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , 
+                 "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , 
+                 "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")         
 
 scrambled2 %>%
   tbl_summary(by = Status, missing_text = "(Missing N)",   label = list(FU_TIME ~ "Follow-up Time (year)", FU_TIME_Death ~ "Follow-up Time until Death (year)", SBP_TL ~ "Baseline Systolic blood pressure (mm-Hg)", DBP_TL ~ "Baseline Diatolic blood pressure (mm-Hg)",AGEONSET_TL ~ "Age at T1D onset (year)", BMI_TL ~ "Baseline BMI (kg/m2)", AGE_TL ~ "Baseline Age (year)",B_HBA1C_PRC ~ "Baseline HbA1c (%)",DU_ACR ~ "Baseline ACR (mg/g Cr)",BL_eGFR ~"Baseline eGFR (mL/min/1/.73m2)",log10_B_HBA1C_PRC ~"log10 HbA1c", log10_DU_ACR ~"log10 ACR" ), type = all_continuous() ~ "continuous2", statistic = list(all_continuous() ~ c("{mean}, {sd}","{median} ({p25}, {p75})", "{min}, {max}"),all_categorical() ~ "{n} ({p}%)"))  %>%
@@ -58,7 +65,7 @@ scrambled2 %>%
   bold_labels()
 
 
-## ---- histogram, echo=FALSE, message=FALSE, warning=FALSE---------------------
+## ---- histogram, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE----
 var_num <- scrambled  %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
 
 var_num %>%
@@ -70,7 +77,7 @@ var_num %>%
 
 
 
-## ----proteins-vec, include=FALSE----------------------------------------------
+## ----proteins-vec, include=FALSE------------------------------------
 proteins <- c("KIM1.npx",      "SYND1.npx", "IL.1RT1.npx","WFDC2.npx", "CD27.npx",
               "TNFRSF10A.npx", "LAYN.npx",  "PVRL4.npx",  "EDA2R.npx" ,"TNFRSF4.npx" ,
               "GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,
@@ -78,29 +85,33 @@ proteins <- c("KIM1.npx",      "SYND1.npx", "IL.1RT1.npx","WFDC2.npx", "CD27.npx
               "LTBR.npx") 
 
 
-## ----proteins-list, echo=FALSE------------------------------------------------
+## ----proteins-list, echo=FALSE--------------------------------------
 proteins
 
 
-## ----Correlation-table-proteins, echo=FALSE, message=FALSE, warning=FALSE-----
-protein <- scrambled  %>% select(proteins)
+## ----Correlation-table-proteins, echo=FALSE, message=FALSE, warning=FALSE----
+protein <- scrambled  %>% select(all_of(proteins))
 tab_corr(protein, p.numeric=TRUE, corr.method = c( "spearman"))
 
 
-## ----Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 45, fig.height=30----
+## ----Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE----
 
 cors <- cor(protein, method = c( "spearman"), use ="complete.obs")
 hcl <- hclust(as.dist(1-abs(cors)))
 plot(hcl)
+
+
+## ----Correlation-proteins-ord, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 60, fig.height=40----
+
 ord <- hcl$order
 cors_ord <- cors[ord,ord]
-
 cors_ord <- round(cors_ord,2)
-corrplot(cors_ord, type ="lower", tl.pos ="lt")
-corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3)
+corrplot(cors_ord, type ="lower", tl.pos ="lt", diag=FALSE) # left/top
+corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3, 
+   diag=FALSE, col="black")
 
 
-## ----scrambled-RDS, echo=FALSE, message=FALSE, warning=FALSE------------------
+## ----scrambled-RDS, echo=FALSE, message=FALSE, warning=FALSE--------
 pathRDS <- "./Data/scrambled.rds"
 scrambled <- scrambled %>% mutate(status=CASE_CONTROL, time=FU_TIME)
 saveRDS(scrambled, file = pathRDS)
