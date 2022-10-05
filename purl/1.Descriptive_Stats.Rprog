@@ -65,7 +65,7 @@ scrambled2 %>%
   bold_labels()
 
 
-## ---- histogram, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE----
+## ---- histogram, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"----
 var_num <- scrambled  %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
 
 var_num %>%
@@ -94,20 +94,21 @@ protein <- scrambled  %>% select(all_of(proteins))
 tab_corr(protein, p.numeric=TRUE, corr.method = c( "spearman"))
 
 
-## ----Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE----
+## ----Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 12, fig.height=8, dev ="svg"----
 
 cors <- cor(protein, method = c( "spearman"), use ="complete.obs")
 hcl <- hclust(as.dist(1-abs(cors)))
 plot(hcl)
 
 
-## ----Correlation-proteins-ord, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 60, fig.height=40----
+## ----Correlation-proteins-ord, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 90, fig.height=60, dev ="svg"----
 
 ord <- hcl$order
 cors_ord <- cors[ord,ord]
 cors_ord <- round(cors_ord,2)
-corrplot.mixed(cors_ord, lower ="pie", upper="number", tl.pos ="lt",
- mar = c(0,0,2,0), tl.cex=4, title="Correlation matrix", number.cex =3) # left/top
+corrplot.mixed(cors_ord, upper ="pie", lower="number", tl.pos ="lt",
+ mar = c(0,0,2,0), tl.cex=7, main="Correlation matrix", number.cex =5,
+ lower.col="black")
 #corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3, 
 #   col="black", cl.pos ="n", main="Correlation matrix")
 
