@@ -1,5 +1,5 @@
 ## ----setup, include=FALSE-----------------------------------------------------
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
 
 
 ## ---- data, echo=FALSE, message=FALSE, warning=FALSE--------------------------
@@ -20,8 +20,8 @@ pacman::p_load(
   sjPlot,       # correlation matrix
   purrr,        # enhances R functional programming (FP) toolki 
   tidyr,        #Tools to help to create tidy data
-  ggplot2,       #Plot the results
-  glmnetUtils   #
+  ggplot2,      #Plot the results
+  glmnetUtils   #Glmnet models for multiple alpha
   )
 
 
@@ -58,11 +58,30 @@ plot(pfit, label = TRUE)
 
 
 ## ----glmnetUtils--------------------------------------------------------------
-library(glmnetUtils)
+
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
 cva_pfit <- cva.glmnet(x=x,y=y,family = "binomial", alpha = alphv)
 minlossplot(cva_pfit)
+
+
+## ----get_best_params----------------------------------------------------------
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit)	
+
+
+## ----get_best_coef------------------------------------------------------------
+coef(cva_pfit, s = get_model_params(cva_pfit)$lambdaMin, alpha=get_model_params(cva_pfit)$alpha)
 
 
 ## ----save-cva_pfit------------------------------------------------------------

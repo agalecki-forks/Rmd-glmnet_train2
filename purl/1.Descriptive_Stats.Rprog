@@ -1,8 +1,8 @@
-## ----setup, include=FALSE-----------------------------------------------------
-knitr::opts_chunk$set(echo = TRUE)
+## ----knitr-setup, include=FALSE-----------------------------------------------
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
 
 
-## ---- data, echo=FALSE, message=FALSE, warning=FALSE--------------------------
+## ----pacman, echo=FALSE, message=FALSE, warning=FALSE-------------------------
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -18,14 +18,29 @@ pacman::p_load(
   flextable,    # format the output table
   gtsummary,    # calculate summary statistics and format the results
   sjPlot,       # correlation matrix
-  purrr,        # enhances R’s functional programming (FP) toolki 
+  purrr,        # enhances R functional programming (FP) toolkit 
   tidyr,        #Tools to help to create tidy data
-  ggplot2       #Plot the results
-  )  
+  ggplot2,      #Plot the results
+  corrplot
+  )
 
-scrambled=readxl::read_excel("./Data/jnpx_scrambled_053122.xlsx", na = "", guess_max = 1000)
-scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
-  
+
+## ----rsetup-------------------------------------------------------------------
+sessionInfo()
+
+
+## ---- data-read, echo=FALSE, message=FALSE, warning=FALSE---------------------
+xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
+
+scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
+
+
+## ----var-names----------------------------------------------------------------
+names(scrambled_orig)
+
+
+## ---- table1, echo=FALSE, message=FALSE, warning=FALSE------------------------
 scrambled2 <- scrambled  %>% 
           mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
           Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Non-case"))%>%                                select(-INDEX,-SEX,-CASE_CONTROL) %>%
@@ -41,7 +56,6 @@ scrambled2 %>%
   modify_footnote( all_stat_cols() ~ "Mean (SD), Median (IQR) or Frequency (%)")%>%
   modify_caption("**Table 1. Patient Characteristics**") %>%
   bold_labels()
-  
 
 
 ## ---- histogram, echo=FALSE, message=FALSE, warning=FALSE---------------------
@@ -56,13 +70,38 @@ var_num %>%
 
 
 
-## ---- Correlation, echo=FALSE, message=FALSE, warning=FALSE-------------------
+## ----proteins-vec, include=FALSE----------------------------------------------
+proteins <- c("KIM1.npx",      "SYND1.npx", "IL.1RT1.npx","WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx", "LAYN.npx",  "PVRL4.npx",  "EDA2R.npx" ,"TNFRSF4.npx" ,
+              "GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
 
-protein <- scrambled  %>% select("KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
 
-tab_corr(protein,p.numeric=TRUE,   corr.method = c( "spearman"))
+## ----proteins-list, echo=FALSE------------------------------------------------
+proteins
 
-scrambled <- scrambled %>% mutate(status=CASE_CONTROL,time=FU_TIME)
-saveRDS(scrambled, file = "./Data/scrambled.rds")
 
+## ----Correlation-table-proteins, echo=FALSE, message=FALSE, warning=FALSE-----
+protein <- scrambled  %>% select(proteins)
+tab_corr(protein, p.numeric=TRUE, corr.method = c( "spearman"))
+
+
+## ----Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 45, fig.height=30----
+
+cors <- cor(protein, method = c( "spearman"), use ="complete.obs")
+hcl <- hclust(as.dist(1-abs(cors)))
+plot(hcl)
+ord <- hcl$order
+cors_ord <- cors[ord,ord]
+
+cors_ord <- round(cors_ord,2)
+corrplot(cors_ord, type ="lower", tl.pos ="lt")
+corrplot(cors_ord, method ="number",type ="upper", tl.pos ="n", add=TRUE,  number.cex=3)
+
+
+## ----scrambled-RDS, echo=FALSE, message=FALSE, warning=FALSE------------------
+pathRDS <- "./Data/scrambled.rds"
+scrambled <- scrambled %>% mutate(status=CASE_CONTROL, time=FU_TIME)
+saveRDS(scrambled, file = pathRDS)
 

@@ -4,11 +4,13 @@ subtitle: 'Logistic Regression Model'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
 output:
-  rmdformats::readthedown: default
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true 
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
 ```
 
 ```{r, data, echo=FALSE, message=FALSE, warning=FALSE}
