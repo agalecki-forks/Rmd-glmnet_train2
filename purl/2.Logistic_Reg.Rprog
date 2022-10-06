@@ -37,10 +37,11 @@ scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),
 dim(scrambled)
 
 #select variables for unadjusted logistic regression model
-data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
- "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx",
- "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,
- "TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
+data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx",
+ "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
+ "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
+ "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx", "TNFRSF6B.npx", "CD160.npx",
+ "EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
 
 #drop any records with NA
 data_drop_na <- data %>% drop_na()    
@@ -62,7 +63,7 @@ y <- data.matrix(data_drop_na[,c("status")])
 table(y)
 
 
-## ---- Unstardized, echo=TRUE, message=FALSE, warning=FALSE----------
+## ---- Unadjusted, echo=TRUE, message=FALSE, warning=FALSE-----------
 #fit the unadjusted logistic regression model
 pfit <- glmnet(x, y, family = "binomial", alpha=0)
 class(pfit)
@@ -74,6 +75,22 @@ plot(pfit, label = TRUE)
 
 ## ---- coefficient-profile-plot12, echo=TRUE, message=FALSE, warning=FALSE----
 coefpath(pfit) 
+
+
+## ---- Unadjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE----
+#fit the cross-validated model
+cvfit1 <- cv.glmnet(x, y, family = "binomial", alpha=0)
+plot(cvfit1, label = TRUE) 
+
+
+## ---- Unadjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE----
+cvfit1$lambda.min
+coef(cvfit1, s = "lambda.min")
+
+
+## ---- Unadjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----
+cvfit1$lambda.1se
+coef(cvfit1)
 
 
 ## ----glmnetUtils----------------------------------------------------
@@ -108,29 +125,14 @@ coef(cva_pfit1, s = get_model_params(cva_pfit1)$lambdaMin,
 save(cva_pfit1, file = "./save/21Logistic-Reg1-save1.Rdata")
 
 
-## ---- Unadjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE----
-#fit the cross-validated model
-cvfit1 <- cv.glmnet(x, y, family = "binomial", alpha=0)
-plot(cvfit1, label = TRUE) 
-
-
-## ---- Unadjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE----
-cvfit1$lambda.min
-coef(cvfit1, s = "lambda.min")
-
-
-## ---- Unadjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----
-cvfit1$lambda.lse
-coef(cvfit1)
-
-
 ## ---- Adjusted, echo=TRUE, message=FALSE, warning=FALSE-------------
 
 #select variables for adjusted model
 data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
-         "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx",
-         "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
-         "DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
+         "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx",
+         "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
+         "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
+         "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
          "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR") 
 dim(data2)         
 
