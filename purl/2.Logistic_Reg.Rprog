@@ -1,8 +1,8 @@
-## ----setup, include=FALSE-----------------------------------------------------
-knitr::opts_chunk$set(echo = TRUE)
+## ----setup, include=FALSE-------------------------------------------
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
 
 
-## ---- data, echo=FALSE, message=FALSE, warning=FALSE--------------------------
+## ---- data, echo=FALSE, message=FALSE, warning=FALSE----------------
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -20,20 +20,28 @@ pacman::p_load(
   sjPlot,       # correlation matrix
   purrr,        # enhances R functional programming (FP) toolki 
   tidyr,        #Tools to help to create tidy data
-  ggplot2,       #Plot the results
-  glmnetUtils   #
+  ggplot2,      #Plot the results
+  glmnetUtils,  #Glmnet models for multiple alpha
+  coefplot      # Plotting Model Coefficients
   )
 
 
-## ---- prepare-data, echo=TRUE, message=FALSE, warning=FALSE-------------------
+## ---- prepare-data, echo=TRUE, message=FALSE, warning=FALSE---------
 #read the data that is stored under the data folder
 
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
+scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),
+                                   log10_DU_ACR=log10(DU_ACR))
 
-#select variables for unadjusted model
-data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
+dim(scrambled)
+
+#select variables for unadjusted logistic regression model
+data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx",
+ "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
+ "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
+ "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx", "TNFRSF6B.npx", "CD160.npx",
+ "EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
 
 #drop any records with NA
 data_drop_na <- data %>% drop_na()    
@@ -42,58 +50,91 @@ data_drop_na <- data %>% drop_na()
 nrow(data_drop_na)
 
 #includes all proteins after excluding missing data
-x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")])
+x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
+        "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx",
+        "TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx",
+        "TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx",
+        "RELT.npx","LTBR.npx")])
+dim(x)
+colnames(x)
 
 #select follow-up time and status
 y <- data.matrix(data_drop_na[,c("status")])
+table(y)
 
 
-## ---- Unstardized, echo=TRUE, message=FALSE, warning=FALSE--------------------
-#fit the unadjusted(???) logistic regression model
-pfit <- glmnet(x, y, family = "binomial")
+## ---- Unadjusted, echo=TRUE, message=FALSE, warning=FALSE-----------
+#fit the unadjusted logistic regression model
+pfit <- glmnet(x, y, family = "binomial", alpha=0)
+class(pfit)
 
 
-## ---- Unstardized_plot, echo=TRUE, message=FALSE, warning=FALSE---------------
+## ---- coefficient-profile-plot1, echo=TRUE, message=FALSE, warning=FALSE----
 plot(pfit, label = TRUE) 
 
 
-## ----glmnetUtils--------------------------------------------------------------
-library(glmnetUtils)
+## ---- coefficient-profile-plot12, echo=TRUE, message=FALSE, warning=FALSE----
+coefpath(pfit) 
+
+
+## ---- Unadjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE----
+#fit the cross-validated model
+cvfit1 <- cv.glmnet(x, y, family = "binomial", alpha=0)
+plot(cvfit1, label = TRUE) 
+
+
+## ---- Unadjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE----
+cvfit1$lambda.min
+coef(cvfit1, s = "lambda.min")
+
+
+## ---- Unadjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----
+cvfit1$lambda.1se
+coef(cvfit1)
+
+
+## ----glmnetUtils----------------------------------------------------
+
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit <- cva.glmnet(x=x,y=y,family = "binomial", alpha = alphv)
-minlossplot(cva_pfit)
+cva_pfit1 <- cva.glmnet(x=x,y=y,family = "binomial", alpha = alphv)
+minlossplot(cva_pfit1)
 
 
-## ----save-cva_pfit------------------------------------------------------------
-save(cva_pfit, file = "./save/21Logistic-Reg1-save1.Rdata")
+## ----get_best_params------------------------------------------------
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit1)	
 
 
-## ---- Unstardized_cv_plot, echo=TRUE, message=FALSE, warning=FALSE------------
-#fit the cross-validatedmodel
-cvfit <- cv.glmnet(x, y, family = "binomial")
-
-plot(pfit, label = TRUE) 
+## ----get_best_coef--------------------------------------------------
+coef(cva_pfit1, s = get_model_params(cva_pfit1)$lambdaMin,
+        alpha=get_model_params(cva_pfit1)$alpha)
 
 
-## ---- Unstardized_cv_min, echo=TRUE, message=FALSE, warning=FALSE-------------
-#get the minimal lambda value (value of lambda that gives minimum cvm)
-cvfit$lambda.min
-# Cross-validated logistic regression Model using the minimal lambda
-coef(cvfit, s = "lambda.min")
+## ----save-cva_pfit1-------------------------------------------------
+save(cva_pfit1, file = "./save/21Logistic-Reg1-save1.Rdata")
 
 
-## ---- Unstardized_cv_lse, echo=TRUE, message=FALSE, warning=FALSE-------------
-#largest value of lambda such that error is within 1 standard error of the minimum.
-cvfit$lambda.lse
-# Cross-validated Logistic Regression Model using the lambda.lse
-coef(cvfit)
-
-
-## ---- Adjusted, echo=TRUE, message=FALSE, warning=FALSE-----------------------
+## ---- Adjusted, echo=TRUE, message=FALSE, warning=FALSE-------------
 
 #select variables for adjusted model
-data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR") 
+data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
+         "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx",
+         "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
+         "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
+         "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
+         "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR") 
+dim(data2)         
 
 #drop any records with NA
 data_drop_na2 <- data2 %>% drop_na()    
@@ -102,37 +143,49 @@ data_drop_na2 <- data2 %>% drop_na()
 nrow(data_drop_na2)
 
 #includes all proteins after excluding missing data
-x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx","CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx","TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR")])
+x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
+        "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
+        "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
+        "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
+        "EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC",
+        "log10_DU_ACR")])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("status")])
 
-#fit the unadjusted logistic regression model
-pfit2 <- glmnet(x2, y2, family = "binomial")
+
+## ----glmnet-pfit2, echo=TRUE, message=FALSE, warning=FALSE----------
+#fit the adjusted logistic regression model
+pfit2 <- glmnet(x2, y2, family = "binomial", alpha=0)
 
 
 
-## ---- Adjusted_plot, echo=TRUE, message=FALSE, warning=FALSE------------------
+## ---- Adjusted_plot, echo=TRUE, message=FALSE, warning=FALSE--------
 plot(pfit2, label = TRUE) 
 
 
-## ---- Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE---------------
+## ---- Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE-----
 #fit the cross-validatedmodel
-cvfit2 <- cv.glmnet(x2, y2, family = "binomial")
+cvfit2 <- cv.glmnet(x2, y2, family = "binomial", alpha=0)
 
-plot(pfit2, label = TRUE) 
+plot(cvfit2, label = TRUE) 
 
 
-## ---- Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE----------------
+## ---- Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE------
 #get the minimal lambda value (value of lambda that gives minimum cvm)
-cvfit2$lambda.min
+(l_min <- cvfit2$lambda.min)
+
+# Express on natural log scale
+log(l_min)
 # Cross-validated Logistic Regression Model using the minimal lambda
 coef(cvfit2, s = "lambda.min")
 
 
-## ---- Adjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----------------
-#largest value of lambda such that error is within 1 standard error of the minimum.
-cvfit2$lambda.lse
-# Cross-validated Logistic Regression Model using the lambda.lse
+## ---- Adjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE------
+(l_1se <- cvfit2$lambda.1se)
+
+# Express on natural log scale
+log(l_1se)
+
 coef(cvfit2)
 
