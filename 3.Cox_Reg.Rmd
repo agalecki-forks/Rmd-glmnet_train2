@@ -312,3 +312,50 @@ log(l_1se)
 
 coef(cvfit2)
 ```
+
+# glmnetUtils (M2)
+
+* Glmnet models for multiple alpha 
+* We use cross-validation to tune hyperparameter $\alpha$.
+* The idea of "explicitly control the fold" is implemented in `glmnetUtils` package
+* The cva.glmnet function does simultaneous cross-validation for both the $\alpha$ and $\lambda$ parameters in an elastic net model.
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+```{r glmnetUtils_M2}
+
+set.seed(46)
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit2 <- cva.glmnet(x=x2,y=y2,family = "cox", alpha = alphv)
+minlossplot(cva_pfit2)
+```
+
+Extract the best (hyper)parameters from cva.glmnet object
+
+```{r get_best_params_M2}
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit2)	
+```
+
+Cox regression coefficients for Model M2 using the best combination of (hyper)parameters
+
+```{r get_best_coef_M2}
+coef(cva_pfit2, s = get_model_params(cva_pfit2)$lambdaMin,
+        alpha=get_model_params(cva_pfit2)$alpha)
+```
+
+Save `cva_pfit2` object for post-processing
+
+```{r save-cva_pfit1_M2}
+save(cva_pfit2, file = "./save/21Cox-Reg1-save2.Rdata")
+```
