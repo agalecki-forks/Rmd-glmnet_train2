@@ -48,74 +48,161 @@ We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 
 
 
-# glmnet for Model M1 ($\alpha=0$)
 
-## Data preparation
+# Read Data
 
 Data are prepared for "unadjusted" logistic regression (Model M1)
 
-```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+```{r, readxl-data, echo=TRUE, message=FALSE, warning=FALSE}
 #read the data that is stored under the data folder
 
 xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
 data_orig <- readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 
+dim(data_orig)
 colnames(data_orig)
 
 # Vectors with variable names in data_orig 
-idvars <- "INDEX"
-protein_nms <- c("KIM1.npx",       "SYND1.npx",   "IL.1RT1.npx", "WFDC2.npx", "CD27.npx", 
-              "TNFRSF10A.npx",  "LAYN.npx",    "PVRL4.npx",   "EDA2R.npx", "TNFRSF4.npx", 
-              "GFR_alpha_1_npx","TNF.R1.npx",  "PI3_npx",     "EFNA4.npx", "TNF.R2.npx" ,
-              "DLL1.npx",       "TNFRSF6B.npx","CD160.npx",   "EPHA2.npx", "RELT.npx",
-              "LTBR.npx")
+protein_nms <- c(
+ "KIM1.npx",       "SYND1.npx",   "IL.1RT1.npx", "WFDC2.npx", "CD27.npx", 
+ "TNFRSF10A.npx",  "LAYN.npx", "PVRL4.npx",   "EDA2R.npx", "TNFRSF4.npx", 
+ "GFR_alpha_1_npx","TNF.R1.npx",  "PI3_npx",  "EFNA4.npx", "TNF.R2.npx",
+ "DLL1.npx",       "TNFRSF6B.npx","CD160.npx",   "EPHA2.npx", "RELT.npx",
+   "LTBR.npx")
 varx1 <- c("B_HBA1C_PRC", "DU_ACR", "BL_eGFR")
 tvars <- c("CASE_CONTROL","FU_TIME")
 varx2  <- c("SEX", "SBP_TL", "DBP_TL", "AGEONSET_TL", "BMI_TL", "AGE_TL")
-vars_othr <- c(idvars, tvars, varx1, varx2)
+vars_sel <- c("INDEX",tvars, protein_nms, varx1, varx2)
 
-
-protein_df <- data_orig %>% select(all_of(protein_nms))
-
-colnames(protein_df)
-
-data_othr <- data_orig  %>% 
-    select(all_of(vars_othr))
-colnames(data_othr)
-
-
-data_othr <- data_othr  %>%   
-    mutate(status = CASE_CONTROL, time = FU_TIME)  %>% # rename variables
-    mutate(log10_B_HBA1C_PRC = log10(B_HBA1C_PRC),
-           log10_DU_ACR=log10(DU_ACR))   %>%
-    select(-c(B_HBA1C_PRC, DU_ACR, CASE_CONTROL, FU_TIME))   # drop selected variables
-data_all <- bind_cols(data_othr, protein_df)
-
-colnames(data_all)   
-summary(data_all)   
-
-
-#select variables for unadjusted logistic regression model
-
-varx <- c(protein_nms, tvars)
-
-data <- data_all  %>% select(all_of(varx)) 
-
-#drop any records with NA
-data_drop_na <- data[, protein_nms] %>% drop_na()    
-
-#Total sample size
-nrow(data_drop_na)
-
-#includes all proteins after excluding missing data
-x <- data.matrix(data_drop_na[,protein_nms])
-dim(x)
-colnames(x)
-
-#select follow-up time and status
-y <- data.matrix(data_drop_na[,c("status")])
-table(y)
+data_all <- data_orig  %>%  
+  select(all_of(vars_sel)) %>%
+  rename(., status = CASE_CONTROL, time = FU_TIME) %>% # rename variables
+  mutate(status = factor(status, labels =c("0x","1x"))  
 ```
+
+```{r data-all-summ}
+dim(data_all)
+colnames(data_all)   
+glimpse(data_all)
+```
+
+# glmnet for Model M1 ($\alpha=0$) using tidymodels
+
+
+```{r, prepare-data-all, echo=TRUE, message=FALSE, warning=FALSE}
+ ##   mutate(log10_B_HBA1C_PRC = log10(B_HBA1C_PRC),
+ ##          log10_DU_ACR=log10(DU_ACR))   %>%
+ 
+```
+
+* Select subset of data with complete cases for unadjusted logistic regression model (M1).
+* Column "INDEX" does not have missing values
+
+```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+
+varnms1  <- c("INDEX", protein_nms, "status")
+data1 <- data_all  %>% select(all_of(varnms1)) %>% drop_na()
+dim(data1)
+```
+
+## Data splitting and resampling
+
+
+```{r initial-split}
+set.seed(123)
+splits     <- initial_split(data1, strata = status, prop=0.9)
+data1_test  <- testing(splits)  # Included for illustration. External data will be used for testing
+data1_train <- data1            # _All_ data will be used for training
+
+
+```
+
+```{r validation-split}
+set.seed(234)
+val_set <- validation_split(data1_train, strata = status, prop = 0.80)
+val_set
+
+cv_set <- vfold_cv(data1_train)
+cv_set
+```
+
+
+
+## Model M1: Penalized logistic regression
+
+*  glmnet model specification 
+
+```{r glmnet-mod-spec}
+glmnet_modspec <- 
+   logistic_reg(penalty = tune(), mixture = 0) %>%  # Logistic regression
+   set_engine("glmnet")
+class(glmnet_modspec) # "logistic_reg" "model_spec" 
+
+glmnet_wf <- workflow() %>%  add_model(glmnet_modspec)
+```
+
+## Recipe for Model M1 
+
+```{r M1-recipe}
+glmnet_recipe <-
+  recipe(status ~ ., data = data1_train) %>%
+  update_role (INDEX, new_role = "ID") %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+print(glmnet_recipe)
+summary(glmnet_recipe) %>% print(n=30)
+glmnet_wf <- add_recipe(glmnet_wf, glmnet_recipe)
+```
+
+
+## Create the workflow 
+
+```{r  glmnet-mod-fit}
+
+fit1_wf <- fit(glmnet_wf, data = data1_train) 
+
+class(fit1_wf)
+
+bind_cols(
+    predict(fit1_wf, data1_test),
+    predict(glmnet_fit1, data1_test, type = "prob")
+  )
+```
+
+## Create the grid for tuning
+glmnet_set <- parameters(list(lambda = penalty(), alpha = mixture()))
+
+# glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
+#    0.2, 0.4, 0.6, 0.8, 1))
+
+glmnet_grid <- grid_regular(
+ mixture(),
+ penalty(),
+ levels = c(3,4)
+ )
+ update(glmnet_set, alpha =c(0)
+ 
+
+## Train and tune the model
+glmnet_tune <- 
+  tune_grid(glmnet_wf, resamples = cv_set, grid = glmnet_grid) 
+
+
+lr_res <- 
+  glmnet_wf %>% 
+  tune_grid(val_set,
+            grid = lr_reg_grid,
+            control = control_grid(save_pred = TRUE),
+            metrics = metric_set(roc_auc))
+
+## Validate model M1
+
+https://stackoverflow.com/questions/63087592/
+https://dials.tidymodels.org/articles/Basics.html
+https://www.tidymodels.org/start/case-study/
 
 ## Model M1 fit $\alpha=0$
 
