@@ -114,7 +114,6 @@ splits     <- initial_split(data1, strata = cstatus, prop=0.9)
 data1_test  <- testing(splits)  # Included for illustration. External data will be used for testing
 data1_train <- data1            # _All_ data will be used for training
 
-
 ```
 
 ```{r validation-split}
@@ -130,11 +129,11 @@ cv_set
 
 ## Model M1: Penalized logistic regression
 
-*  glmnet model specification 
+Penalized logistic regression model is specified using `glmnet` engine and added to workflow. 
 
 ```{r glmnet-mod-spec}
 glmnet_modspec <- 
-   logistic_reg(penalty = tune(), mixture = 0) %>%  # Logistic regression
+   logistic_reg(penalty = tune(), mixture = 1) %>%  # Logistic regression
    set_engine("glmnet")
 class(glmnet_modspec) # "logistic_reg" "model_spec" 
 
@@ -142,6 +141,13 @@ glmnet_wf <- workflow() %>%  add_model(glmnet_modspec)
 ```
 
 ## Recipe for Model M1 
+
+From documentation: 
+
+* A recipe is a description of the steps to be applied to a data set in order
+to prepare it for data analysis.
+* `step_novel` creates a specification of a recipe step that will assign a previously unseen factor level to a new value.
+* 
 
 ```{r M1-recipe}
 glmnet_recipe <-
@@ -167,7 +173,7 @@ fit1_wf <- fit(glmnet_wf, data = data1_train)
 class(fit1_wf)
 
 bind_cols(
-    predict(fit1_wf, data1_test),
+    predict(fit1_wf,data1_test),
     predict(glmnet_fit1, data1_test, type = "prob")
   )
 ```
@@ -175,26 +181,39 @@ bind_cols(
 ## Create the grid for tuning
 glmnet_set <- parameters(list(lambda = penalty(), alpha = mixture()))
 
-# glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
-#    0.2, 0.4, 0.6, 0.8, 1))
+glmnet_grid1 <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20))
+#, mixture = c(0.05, 0.2, 0.4, 0.6, 0.8, 1))
 
 glmnet_grid <- grid_regular(
  mixture(),
  penalty(),
  levels = c(3,4)
  )
- update(glmnet_set, alpha =c(0)
+## update(glmnet_set, alpha =c(0)
  
 
 ## Train and tune the model
-glmnet_tune <- 
-  tune_grid(glmnet_wf, resamples = cv_set, grid = glmnet_grid) 
+glmnet_tune_res <- tune_grid(glmnet_wf, resamples = cv_set, grid = glmnet_grid1,
+                         control = control_grid(save_pred = TRUE),
+                         metrics = metric_set(roc_auc)) 
+                         
+res1 <-glmnet_tune_res[[1]]
+res11 <- res1[1]
+res_plot <- 
+  glmnet_tune_res %>% 
+  collect_metrics() %>% 
+  ggplot(aes(x = penalty, y = mean)) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("Area under the ROC Curve") +
+  scale_x_log10(labels = scales::label_number())
 
+_plot
 
 lr_res <- 
   glmnet_wf %>% 
   tune_grid(val_set,
-            grid = lr_reg_grid,
+            grid = glmnet_grid1,
             control = control_grid(save_pred = TRUE),
             metrics = metric_set(roc_auc))
 
@@ -202,6 +221,7 @@ lr_res <-
 
 https://stackoverflow.com/questions/63087592/
 https://dials.tidymodels.org/articles/Basics.html
+
 https://www.tidymodels.org/start/case-study/
 
 ## Model M1 fit $\alpha=0$
