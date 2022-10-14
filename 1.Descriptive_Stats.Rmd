@@ -14,8 +14,6 @@ knitr::opts_chunk$set(echo = TRUE, comment="#>")
 ```
 
 
-
-
 ```{r pacman, echo=FALSE, message=FALSE, warning=FALSE}
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
@@ -49,7 +47,7 @@ sessionInfo()
 
 
 ```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
-xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
+xlsx_path = "./Data/data_example.xlsx"
 
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
@@ -73,6 +71,8 @@ scrambled2 <- scrambled  %>%
                  "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , 
                  "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , 
                  "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")         
+
+scrambled2$FU_TIME_Death=as.numeric(scrambled2$FU_TIME_Death)
 
 scrambled2 %>%
   tbl_summary(by = Status, missing_text = "(Missing N)",   label = list(FU_TIME ~ "Follow-up Time (year)", FU_TIME_Death ~ "Follow-up Time until Death (year)", SBP_TL ~ "Baseline Systolic blood pressure (mm-Hg)", DBP_TL ~ "Baseline Diatolic blood pressure (mm-Hg)",AGEONSET_TL ~ "Age at T1D onset (year)", BMI_TL ~ "Baseline BMI (kg/m2)", AGE_TL ~ "Baseline Age (year)",B_HBA1C_PRC ~ "Baseline HbA1c (%)",DU_ACR ~ "Baseline ACR (mg/g Cr)",BL_eGFR ~"Baseline eGFR (mL/min/1/.73m2)",log10_B_HBA1C_PRC ~"log10 HbA1c", log10_DU_ACR ~"log10 ACR" ), type = all_continuous() ~ "continuous2", statistic = list(all_continuous() ~ c("{mean}, {sd}","{median} ({p25}, {p75})", "{min}, {max}"),all_categorical() ~ "{n} ({p}%)"))  %>%
