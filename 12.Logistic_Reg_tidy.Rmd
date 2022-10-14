@@ -1,5 +1,5 @@
 ---
-title: 'Lasso and Elastic-Net Regularized for Logistic Regression'
+title: 'Tidy Regularized Logistic Regression'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
 output:
