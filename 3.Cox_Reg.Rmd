@@ -32,7 +32,8 @@ pacman::p_load(
   tidyr,        #Tools to help to create tidy data
   ggplot2,      #Plot the results
   glmnetUtils,  #Glmnet models for multiple alpha
-  coefplot      # Plotting Model Coefficients
+  coefplot,      # Plotting Model Coefficients
+  survival      #survival model  
   )
 ```
 
@@ -41,7 +42,7 @@ pacman::p_load(
 In this report we consider two cox regression models for the  `status` (0/1) variable:
 
 * M1: Contains 21 proteins as candidate covariates
-* M2 :Contains 21 prteins and log10(Baseline HbA1c), log10(ACR), eGFR as candidate covariates
+* M2 :Contains 21 proteins and log10(Baseline HbA1c), log10(ACR), eGFR, SEX, and AGE_TL(Baseline Age) as candidate covariates
 
 We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 
@@ -232,7 +233,7 @@ data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
          "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
          "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
          "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
-         "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR") 
+         "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL") 
 dim(data2)         
 
 #drop any records with NA
@@ -247,7 +248,7 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
         "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
         "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
         "EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC",
-        "log10_DU_ACR")])
+        "log10_DU_ACR","SEX","AGE_TL")])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])
