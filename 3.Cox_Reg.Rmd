@@ -39,7 +39,12 @@ pacman::p_load(
 
 # Introduction
 
-In this report we consider two cox regression models for the  `status` (0/1) variable:
+In this report we consider two Cox regression models for the  time-to-event (`time`) variable. Originally this 
+variable was named (`FU_TIME`).  
+
+`status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls, and 1 for Cases.
+
+`status` indicates that an etime-to-follow-up is _censored_. 
 
 * M1: Contains 21 proteins as candidate covariates
 * M2 :Contains 21 proteins and log10(Baseline HbA1c), log10(ACR), eGFR, SEX, and AGE_TL(Baseline Age) as candidate covariates
