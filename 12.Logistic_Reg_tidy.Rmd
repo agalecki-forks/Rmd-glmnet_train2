@@ -1,0 +1,450 @@
+---
+title: 'Tidy Regularized Logistic Regression'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r, data, echo=FALSE, message=FALSE, warning=FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  tidymodels,   # for the recipes package, along with the rest of tidymodels
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolki 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  glmnetUtils,  #Glmnet models for multiple alpha
+  coefplot      # Plotting Model Coefficients
+  )
+```
+https://www.tidymodels.org/start/recipes/#data-split
+# Introduction
+
+In this report we consider two logistic regression models for the  `status` (0/1) variable:
+
+* M1: Contains 21 proteins as candidate covariates
+* M2 :Contains 21 prteins and log10(Baseline HbA1c), log10(ACR), eGFR as candidate covariates
+
+We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
+
+
+
+
+# Read Data
+
+Data are prepared for "unadjusted" logistic regression (Model M1)
+
+```{r, readxl-data, echo=TRUE, message=FALSE, warning=FALSE}
+#read the data that is stored under the data folder
+
+xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
+data_orig <- readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+
+dim(data_orig)
+colnames(data_orig)
+
+# Vectors with variable names in data_orig 
+protein_nms <- c(
+ "KIM1.npx",       "SYND1.npx",   "IL.1RT1.npx", "WFDC2.npx", "CD27.npx", 
+ "TNFRSF10A.npx",  "LAYN.npx", "PVRL4.npx",   "EDA2R.npx", "TNFRSF4.npx", 
+ "GFR_alpha_1_npx","TNF.R1.npx",  "PI3_npx",  "EFNA4.npx", "TNF.R2.npx",
+ "DLL1.npx",       "TNFRSF6B.npx","CD160.npx",   "EPHA2.npx", "RELT.npx",
+   "LTBR.npx")
+varx1 <- c("B_HBA1C_PRC", "DU_ACR", "BL_eGFR")
+tvars <- c("CASE_CONTROL","FU_TIME")
+varx2  <- c("SEX", "SBP_TL", "DBP_TL", "AGEONSET_TL", "BMI_TL", "AGE_TL")
+vars_sel <- c("INDEX",tvars, protein_nms, varx1, varx2)
+
+data_all <- data_orig  %>%  
+  select(all_of(vars_sel)) %>%
+  rename(., status = CASE_CONTROL, time = FU_TIME) %>% # rename variables
+  mutate(cstatus = ifelse(status == 1, "1-Case","0-Cntrl"))  
+```
+
+```{r data-all-summ}
+dim(data_all)
+colnames(data_all)   
+glimpse(data_all)
+```
+
+# glmnet for Model M1 ($\alpha=0$) using tidymodels
+
+
+```{r, prepare-data-all, echo=TRUE, message=FALSE, warning=FALSE}
+ ##   mutate(log10_B_HBA1C_PRC = log10(B_HBA1C_PRC),
+ ##          log10_DU_ACR=log10(DU_ACR))   %>%
+ 
+```
+
+* Select subset of data with complete cases for unadjusted logistic regression model (M1).
+* Column "INDEX" does not have missing values
+
+```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+
+varnms1  <- c("INDEX", protein_nms, "cstatus")
+data1 <- data_all  %>% select(all_of(varnms1)) %>% drop_na()
+dim(data1)
+```
+
+## Data splitting and resampling
+
+
+```{r initial-split}
+set.seed(123)
+splits     <- initial_split(data1, strata = cstatus, prop=0.9)
+data1_test  <- testing(splits)  # Included for illustration. External data will be used for testing
+data1_train <- data1            # _All_ data will be used for training
+
+```
+
+```{r validation-split}
+set.seed(234)
+val_set <- validation_split(data1_train, strata = cstatus, prop = 0.80)
+val_set
+
+cv_set <- vfold_cv(data1_train)
+cv_set
+```
+
+
+
+## Model M1: Penalized logistic regression
+
+Penalized logistic regression model is specified using `glmnet` engine and added to workflow. 
+
+```{r glmnet-mod-spec}
+glmnet_modspec <- 
+   logistic_reg(penalty = tune(), mixture = 1) %>%  # Logistic regression
+   set_engine("glmnet")
+class(glmnet_modspec) # "logistic_reg" "model_spec" 
+
+glmnet_wf <- workflow() %>%  add_model(glmnet_modspec)
+```
+
+## Recipe for Model M1 
+
+From documentation: 
+
+* A recipe is a description of the steps to be applied to a data set in order
+to prepare it for data analysis.
+* `step_novel` creates a specification of a recipe step that will assign a previously unseen factor level to a new value.
+* 
+
+```{r M1-recipe}
+glmnet_recipe <-
+  recipe(cstatus ~ ., data = data1_train) %>%
+  update_role (INDEX, new_role = "ID") %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+print(glmnet_recipe)
+summary(glmnet_recipe) %>% print(n=30)
+glmnet_wf <- add_recipe(glmnet_wf, glmnet_recipe)
+```
+
+
+## Create the workflow 
+
+```{r  glmnet-mod-fit}
+
+fit1_wf <- fit(glmnet_wf, data = data1_train) 
+
+class(fit1_wf)
+
+bind_cols(
+    predict(fit1_wf,data1_test),
+    predict(glmnet_fit1, data1_test, type = "prob")
+  )
+```
+
+## Create the grid for tuning
+glmnet_set <- parameters(list(lambda = penalty(), alpha = mixture()))
+
+glmnet_grid1 <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20))
+#, mixture = c(0.05, 0.2, 0.4, 0.6, 0.8, 1))
+
+glmnet_grid <- grid_regular(
+ mixture(),
+ penalty(),
+ levels = c(3,4)
+ )
+## update(glmnet_set, alpha =c(0)
+ 
+
+## Train and tune the model
+glmnet_tune_res <- tune_grid(glmnet_wf, resamples = cv_set, grid = glmnet_grid1,
+                         control = control_grid(save_pred = TRUE),
+                         metrics = metric_set(roc_auc)) 
+                         
+res1 <-glmnet_tune_res[[1]]
+res11 <- res1[1]
+res_plot <- 
+  glmnet_tune_res %>% 
+  collect_metrics() %>% 
+  ggplot(aes(x = penalty, y = mean)) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("Area under the ROC Curve") +
+  scale_x_log10(labels = scales::label_number())
+
+_plot
+
+lr_res <- 
+  glmnet_wf %>% 
+  tune_grid(val_set,
+            grid = glmnet_grid1,
+            control = control_grid(save_pred = TRUE),
+            metrics = metric_set(roc_auc))
+
+## Validate model M1
+
+https://stackoverflow.com/questions/63087592/
+https://dials.tidymodels.org/articles/Basics.html
+
+https://www.tidymodels.org/start/case-study/
+
+## Model M1 fit $\alpha=0$
+
+* By default mixing (hyper) parameter $\alpha$ is equal to $1$ (lasso)
+* In this example we assume $\alpha$ is equal to $0$ (ridge regression)
+
+
+```{r, Unadjusted, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the unadjusted logistic regression model
+pfit <- glmnet(x, y, family = "binomial", alpha=0)
+class(pfit)
+```
+
+## Extracting info from Model M1
+
+...
+
+###  Model M1 Coefficients Profile Plots
+
+* (Standardized) coefficients plotted versus ${\ell}_1$-norm`(using plot()`function:
+
+```{r, coefficient-profile-plot1, echo=TRUE, message=FALSE, warning=FALSE}
+plot(pfit, label = TRUE) 
+```
+
+"Each curve corresponds to a variable. It shows the path of its coefficient 
+against the ${\ell}_1$-norm of the whole 
+coefficient vector as $\lambda$ varies. The axis above indicates 
+the number of nonzero coefficients at the current $\lambda$,
+which is the effective degrees of freedom (df) for the lasso."
+
+source: ("https://glmnet.stanford.edu/articles/glmnet.html")
+
+* (Standardized) coefficients plotted versus $\log(\lambda)$ using `coefplot::coefpath`:
+
+```{r, coefficient-profile-plot12, echo=TRUE, message=FALSE, warning=FALSE}
+coefpath(pfit) 
+```
+
+# cv.glmnet for M1 ($\alpha=0$)
+
+## C-V for M1 ($\alpha=0$)
+
+* Unadjusted Cross-Validated Logistic Regression Model Coefficient Plot
+
+```{r, Unadjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the cross-validated model
+cvfit1 <- cv.glmnet(x, y, family = "binomial", alpha=0)
+plot(cvfit1, label = TRUE) 
+```
+
+"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves
+along the $\lambda$ sequence (error bars). Two special values along the $\lambda$ sequence are indicated by the 
+vertical dotted lines. `lambda.min` is the value of $\lambda$ that gives minimum mean cross-validated error, 
+while `lambda.1se` is the value of $\lambda$ that gives the most regularized model such that the cross-validated 
+error is within one standard error of the minimum."
+
+source: ("https://glmnet.stanford.edu/articles/glmnet.html")
+
+## Extract info from C-V (M1)
+
+### minimal lambda value
+
+* Unadjusted Cross-Validated Logistic Regression Coefficients using `lambda.min` value 
+* get the minimal lambda value (value of lambda that gives minimum cvm)
+
+```{r, Unadjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
+cvfit1$lambda.min
+coef(cvfit1, s = "lambda.min")
+```
+
+### lambda.lse
+
+* Unadjusted Cross-Validated Logistic Regression Coefficients using `lambda.lse`
+* `lambda.min` is the largest value of lambda such that error is within 1 standard error of the minimum.
+# Cross-validated coefficients of the Logistic Regression Model using the lambda.lse
+
+```{r, Unadjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE}
+cvfit1$lambda.1se
+coef(cvfit1)
+```
+
+# glmnetUtils (M1)
+
+* Glmnet models for multiple alpha 
+* We use cross-validation to tune hyperparameter $\alpha$.
+* The idea of "explicitly control the fold" is implemented in `glmnetUtils` package
+* The cva.glmnet function does simultaneous cross-validation for both the $\alpha$ and $\lambda$ parameters in an elastic net model.
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+```{r glmnetUtils}
+
+set.seed(46)
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit1 <- cva.glmnet(x=x,y=y,family = "binomial", alpha = alphv)
+minlossplot(cva_pfit1)
+```
+
+Extract the best (hyper)parameters from cva.glmnet object
+
+```{r get_best_params}
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit1)	
+```
+
+Logistic regression coefficients for Model M1 using the best combination of (hyper)parameters
+
+```{r get_best_coef}
+coef(cva_pfit1, s = get_model_params(cva_pfit1)$lambdaMin,
+        alpha=get_model_params(cva_pfit1)$alpha)
+```
+
+Save `cva_pfit1` object for post-processing
+
+```{r save-cva_pfit1}
+save(cva_pfit1, file = "./save/12Logistic-Reg1-save1.Rdata")
+```
+
+
+# glmnet for Model M2 ($\alpha=0$)
+
+
+* Adjusted Logistic Regression Model M2(adjusting for Baseline HbA1c, ACR, eGFR)
+
+## Data preparation
+
+```{r, Adjusted, echo=TRUE, message=FALSE, warning=FALSE}
+
+#select variables for adjusted model
+vin1  <- c(protein_nms,"BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR")
+vin2  <- c("time","status")
+selx  <- c(vin1,vin2)
+data2 <- data_all  %>% select(all_of(selx)) 
+dim(data2)         
+
+#drop any records with NA
+data_drop_na2 <- data2 %>% drop_na()    
+
+#Total sample size
+nrow(data_drop_na2)
+
+#includes all proteins after excluding missing data
+x2 <- data.matrix(data_drop_na2[, vin1])
+
+#select follow-up time and status
+y2 <- data.matrix(data_drop_na2[, c("status")])
+```
+
+## Model M2 fit ($\alpha=0$)
+
+```{r glmnet-pfit2, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the adjusted logistic regression model
+pfit2 <- glmnet(x2, y2, family = "binomial", alpha=0)
+
+```
+
+## Extracting info from Model M2
+
+### Coefficient plots
+
+* Adjusted Logistic Regression Model Coefficient Plot
+
+```{r, Adjusted_plot, echo=TRUE, message=FALSE, warning=FALSE}
+plot(pfit2, label = TRUE) 
+```
+
+# cv.glmnet for M2 ($\alpha=0$)
+
+
+## C-V for M2 ($\alpha=0$)
+
+* Adjusted Cross-Validated Logistic Regression Model Coefficient Plot
+
+```{r, Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the cross-validatedmodel
+cvfit2 <- cv.glmnet(x2, y2, family = "binomial", alpha=0)
+
+plot(cvfit2, label = TRUE) 
+```
+
+
+## Extract info from C-V (M2)
+### Coefficients for selected $\lambda$
+
+* Adjusted Cross-Validated Logistic Regressionn Coefficients using `lambda.min` value
+
+```{r, Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
+#get the minimal lambda value (value of lambda that gives minimum cvm)
+(l_min <- cvfit2$lambda.min)
+
+# Express on natural log scale
+log(l_min)
+# Cross-validated Logistic Regression Model using the minimal lambda
+coef(cvfit2, s = "lambda.min")
+```
+
+* Adjusted Cross-Validated Logistic Regression Coefficients using `lambda.1se`
+* largest value of lambda such that error is within 1 standard error of the minimum.
+
+```{r, Adjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE}
+(l_1se <- cvfit2$lambda.1se)
+
+# Express on natural log scale
+log(l_1se)
+
+coef(cvfit2)
+```
+
+
+# R setup
+
+```{r  rsetup}
+sessionInfo()
+```
