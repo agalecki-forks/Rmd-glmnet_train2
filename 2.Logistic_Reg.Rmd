@@ -45,6 +45,8 @@ In this report we consider two logistic regression models for the  `status` (0/1
 
 We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 
+Note: This logistic regression model does not take into account the duration of the follow- up time and it is included for illustrative purposes only.
+
 # glmnet for Model M1 ($\alpha=0$)
 
 ## Data preparation
