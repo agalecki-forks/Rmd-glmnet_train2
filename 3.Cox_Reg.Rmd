@@ -39,7 +39,12 @@ pacman::p_load(
 
 # Introduction
 
-In this report we consider two cox regression models for the  `status` (0/1) variable:
+In this report we consider two Cox regression models for the  time-to-event (`time`) variable. Originally this 
+variable was named (`FU_TIME`).  
+
+`status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls, and 1 for Cases.
+
+`status` indicates that an etime-to-follow-up is _censored_. 
 
 * M1: Contains 21 proteins as candidate covariates
 * M2 :Contains 21 proteins and log10(Baseline HbA1c), log10(ACR), eGFR, SEX, and AGE_TL(Baseline Age) as candidate covariates
@@ -85,7 +90,10 @@ dim(x)
 colnames(x)
 
 #select follow-up time and status
-y <- data.matrix(data_drop_na[,c("time","status")])
+tx <- data.matrix(data_drop_na[,c("time","status")])
+ty    <- tx[, "time"]
+tcens <- tx[,"status"] ## check this!!!!
+y <- survival::Surv(ty, tcens)   
 table(data_drop_na$status)
 ```
 
@@ -101,6 +109,14 @@ pfit <- glmnet(x, y, family = "cox", alpha=0)
 class(pfit)
 ```
 
+* C-Y: How did you decide that lambda=0.1?
+
+```{r surv-plot}
+# survfit object for Cox model where lambda = 0.1
+sf1 <- survival::survfit(pfit, s = 0.1, x = x, y = y)
+plot(sf1)
+
+```
 ## Extracting info from Model M1
 
 ...
