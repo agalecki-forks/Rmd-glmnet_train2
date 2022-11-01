@@ -365,7 +365,7 @@ get_model_params <- function(fit) {
              lambdaSE = lambdaSE[best], eror = error[best])
 }
 
-get_model_params(cva_pfit2)	
+(pfit2_params <- get_model_params(cva_pfit2))	
 ```
 
 Cox regression coefficients for Model M2 using the best combination of (hyper)parameters
@@ -375,15 +375,26 @@ coef(cva_pfit2, s = get_model_params(cva_pfit2)$lambdaMin,
         alpha=get_model_params(cva_pfit2)$alpha)
 ```
 
-# Time-dependent ROC for Survival Prediction Models
+# Time-dependent ROC (M2)
 * source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
+Fit the glmnet models to original data using optimal alpha.
+This section should be considered as an illustration only, because the `glmnet` model
+performance is assessed using training data. For this reason ROC is too optimistic.
+
+```{r pfit2}
+a <- pfit2_params[["alpha"]]
+lmbda_min <- pfit2_params[["lambdaMin"]]
+(pfit2_a <- glmnet(x2, y2, family = "cox", alpha=a))
+```
+
+
 ```{r surv-roc}
-## Fit a Cox model
-coxph2 <- coxph(formula = Surv(time, status) ~ pspline(AGE_TL, df = 4) + factor(SEX) + pspline(log10_B_HBA1C_PRC, df = 4)+ pspline(log10_DU_ACR, df = 4), data    = data_drop_na2)
                 
 ## Obtain the linear predictor
-data_drop_na2$lp <- predict(coxph2, type = "lp")
+ data_drop_na2$lp <- predict(pfit2_a, newx = x2, type = "link", s = lmbda_min)
+ 
+
 # data_drop_na2
 
 ## Define a helper function to evaluate at various t
