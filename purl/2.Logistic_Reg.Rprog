@@ -26,6 +26,11 @@ pacman::p_load(
   )
 
 
+## ----utilsag--------------------------------------------------------
+if (!require('utilsag')) devtools::install_github("agalecki/utilsag", ref = "version-0.07")
+library(utilsag)
+
+
 ## ---- prepare-data, echo=TRUE, message=FALSE, warning=FALSE---------
 #read the data that is stored under the data folder
 
@@ -67,6 +72,11 @@ table(y)
 #fit the unadjusted logistic regression model
 pfit <- glmnet(x, y, family = "binomial", alpha=0)
 class(pfit)
+
+
+## ----mytidy-pfit----------------------------------------------------
+myglance(pfit)
+mytidy(pfit)
 
 
 ## ---- coefficient-profile-plot1, echo=TRUE, message=FALSE, warning=FALSE----
@@ -133,7 +143,7 @@ data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
          "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
          "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
          "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
-         "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR") 
+         "time","status","log10_B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL") 
 dim(data2)         
 
 #drop any records with NA
@@ -147,8 +157,8 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
         "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
         "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
         "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
-        "EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC",
-        "log10_DU_ACR")])
+        "EPHA2.npx","RELT.npx","LTBR.npx","log10_B_HBA1C_PRC",
+        "log10_DU_ACR","SEX","AGE_TL")])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("status")])
