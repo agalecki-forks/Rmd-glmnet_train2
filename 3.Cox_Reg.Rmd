@@ -46,7 +46,7 @@ variable was named (`FU_TIME`).
 
 `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls, and 1 for Cases.
 
-`status` indicates that an etime-to-follow-up is _censored_. 
+`status` indicates that follow-up time is _censored_. 
 
 * M1: Contains 21 proteins as candidate covariates
 * M2 :Contains 21 proteins and log10(Baseline HbA1c), log10(ACR), SEX, and AGE_TL(Baseline Age) as candidate covariates
@@ -272,13 +272,14 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])
+y2Surv <- survival::Surv(y2[,"time"], y2[,"status"])
 ```
 
 ## Model M2 fit ($\alpha=0$)
 
 ```{r glmnet-pfit2, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the adjusted cox regression model
-pfit2 <- glmnet(x2, y2, family = "cox", alpha=0)
+pfit2 <- glmnet(x2, y2Surv, family = "cox", alpha=0)
 
 ```
 
@@ -301,7 +302,7 @@ plot(pfit2, label = TRUE)
 
 ```{r, Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
-cvfit2 <- cv.glmnet(x2, y2, family = "cox", alpha=0)
+cvfit2 <- cv.glmnet(x2, y2Surv, family = "cox", alpha=0)
 
 plot(cvfit2, label = TRUE) 
 ```
@@ -347,7 +348,7 @@ source: (https://glmnet.stanford.edu/articles/glmnet.html)
 
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit2 <- cva.glmnet(x=x2,y=y2,family = "cox", alpha = alphv)
+cva_pfit2 <- cva.glmnet(x=x2,y=y2Surv,family = "cox", alpha = alphv)
 minlossplot(cva_pfit2)
 ```
 
@@ -375,40 +376,82 @@ coef(cva_pfit2, s = get_model_params(cva_pfit2)$lambdaMin,
         alpha=get_model_params(cva_pfit2)$alpha)
 ```
 
-# Time-dependent ROC (M2)
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+# Performance of M2
 
-Fit the glmnet models to original data using optimal alpha.
 This section should be considered as an illustration only, because the `glmnet` model
-performance is assessed using training data. For this reason ROC is too optimistic.
+performance is assessed using training data. For this reason performance of the model
+is too optimistic.
 
-```{r pfit2}
+
+## Preparatory steps
+
+
+* Step 1: Fit the glmnet model to original data (stored in x2 and y2 matrices) using optimal alpha.
+* Note: Object `pfit2_a` contains models for all lambdas. 
+
+```{r pfit2_a-object}
 a <- pfit2_params[["alpha"]]
 lmbda_min <- pfit2_params[["lambdaMin"]]
-(pfit2_a <- glmnet(x2, y2, family = "cox", alpha=a))
+pfit2_a <- glmnet(x2, y2Surv, family = "cox", alpha=a)
 ```
+
+Step 2:Prepare test data
+
+```{r Prepare-test-data-M2}
+dim(data_drop_na2)
+test_rows <- 1:17    # Select rows for testing. Possibly all rows in data_drop_na2.
+x2_test <- x2[test_rows,]
+y2_test <- y2[test_rows,]
+y2Surv_test <- survival::Surv(y2_test[,"time"], y2_test[,"status"] )
+
+data2_test <- data_drop_na2[test_rows, ]
+range(data2_test$time)
+```
+
+Step 3: Calculate predicted values for test data
+
+```{r calc-pred2-vals}
+pred_lp <- predict(pfit2_a, newx = x2_test, type = "link", s = lmbda_min)
+
+```
+
+## Predictive performance of M2
+
+### C-index
+
+Ref: Harrel Jr, F. E. and Lee, K. L. and Mark, D. B. (1996) Tutorial in biostatistics:
+multivariable prognostic models: issues in developing models, evaluating assumptions 
+and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pages 361–387.
+
+
+```{r C-index-M2}
+Cindex(pred_lp, y2Surv_test)
+```
+
+### Time-dependent ROC
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
 
 
 ```{r surv-roc}
                 
-## Obtain the linear predictor
- data_drop_na2$lp <- predict(pfit2_a, newx = x2, type = "link", s = lmbda_min)
+## Augment `data2_test` with linear predictor
+ data2_test$lp <- pred_lp
  
 
-# data_drop_na2
 
 ## Define a helper function to evaluate at various t
 survivalROC_helper <- function(t) {
-    survivalROC(Stime        = data_drop_na2$time,
-                status       = data_drop_na2$status,
-                marker       = data_drop_na2$lp,
+    survivalROC(Stime        = data2_test$time,
+                status       = data2_test$status,
+                marker       = data2_test$lp,
                 predict.time = t,
                 method       = "NNE",
                 span = 0.25 * nrow(data_drop_na2)^(-0.20))
 }
 
 ## Evaluate every 3 years
-survivalROC_data <- tibble(t = 3* c(1,2,3,4,5,6)) %>%
+survivalROC_data <- tibble(t = 3* c(1,2,3,4,5)) %>%
     mutate(survivalROC = map(t, survivalROC_helper),
            ## Extract scalar AUC
            auc = map_dbl(survivalROC, magrittr::extract2, "AUC"),
