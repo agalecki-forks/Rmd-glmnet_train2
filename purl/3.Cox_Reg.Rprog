@@ -22,8 +22,10 @@ pacman::p_load(
   tidyr,        #Tools to help to create tidy data
   ggplot2,      #Plot the results
   glmnetUtils,  #Glmnet models for multiple alpha
-  coefplot,      # Plotting Model Coefficients
-  survival      #survival model  
+  coefplot,     # Plotting Model Coefficients
+  survival,     #survival model 
+  tidymodels,   #for modeling and machine learning using tidyverse principles
+  survivalROC   #survivalROC
   )
 
 
@@ -35,52 +37,45 @@ scrambled<-readRDS(file = "./Data/scrambled.rds")
 scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),
                                    log10_DU_ACR=log10(DU_ACR))
 
-dim(scrambled)
+dim(scrambled) # Number of rows and columns in the input data
 
 #select variables for unadjusted cox regression model
-data <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx",
- "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
- "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
- "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx", "TNFRSF6B.npx", "CD160.npx",
- "EPHA2.npx","RELT.npx","LTBR.npx","time","status") 
+prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
+              "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
+surv_vars <-  c("time", "status")
+xvars1 <- c(surv_vars, prot_npx)
+ 
+data <- scrambled  %>% select(all_of(xvars1)) 
 
 #drop any records with NA
 data_drop_na <- data %>% drop_na()    
 
-#Total sample size
-nrow(data_drop_na)
+# Total sample size and number of columns
+dim(data_drop_na)
 
 #includes all proteins after excluding missing data
-x <- data.matrix(data_drop_na[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
-        "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx",
-        "TNFRSF4.npx","GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx",
-        "TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx","EPHA2.npx",
-        "RELT.npx","LTBR.npx")])
+x <- data.matrix(data_drop_na[, prot_npx])
 dim(x)
-colnames(x)
+colnames(x)  # 21 proteins
 
-#select follow-up time and status
+# time and status
 tx <- data.matrix(data_drop_na[,c("time","status")])
 ty    <- tx[, "time"]
-tcens <- tx[,"status"] ## check this!!!!
-y <- survival::Surv(ty, tcens)   
-table(data_drop_na$status)
+stx <- tx[,"status"]
+ySurv <- survival::Surv(ty, stx)   
+table(data_drop_na$status) # 0-censored, 1-observed time-to-ESKD
 
 
 ## ---- Unadjusted, echo=TRUE, message=FALSE, warning=FALSE-----------
 #fit the unadjusted cox regression model
-pfit <- glmnet(x, y, family = "cox", alpha=0)
+pfit <- glmnet(x, ySurv, family = "cox", alpha=0)
 class(pfit)
 
 
-## ----surv-plot------------------------------------------------------
-# survfit object for Cox model where lambda = 0.1
-sf1 <- survival::survfit(pfit, s = 0.1, x = x, y = y)
-plot(sf1)
-
-
-
-## ---- coefficient-profile-plot1, echo=TRUE, message=FALSE, warning=FALSE----
+## ---- coefficient-profile-plot1, echo=TRUE, message=FALSE-----------
 plot(pfit, label = TRUE) 
 
 
@@ -88,9 +83,9 @@ plot(pfit, label = TRUE)
 coefpath(pfit) 
 
 
-## ---- Unadjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE----
+## ---- Unadjusted_cv_plot, echo=TRUE, message=FALSE------------------
 #fit the cross-validated model
-cvfit1 <- cv.glmnet(x, y, family = "cox", alpha=0)
+cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=0)
 plot(cvfit1, label = TRUE) 
 
 
@@ -101,14 +96,14 @@ coef(cvfit1, s = "lambda.min")
 
 ## ---- Unadjusted_cv_lse, echo=TRUE, message=FALSE, warning=FALSE----
 cvfit1$lambda.1se
-coef(cvfit1)
+coef(cvfit1)  # By default s = "lambda.min"
 
 
 ## ----glmnetUtils----------------------------------------------------
 
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit1 <- cva.glmnet(x=x,y=y,family = "cox", alpha = alphv)
+cva_pfit1 <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv)
 minlossplot(cva_pfit1)
 
 
@@ -124,12 +119,13 @@ get_model_params <- function(fit) {
              lambdaSE = lambdaSE[best], eror = error[best])
 }
 
-get_model_params(cva_pfit1)	
+get_model_params(cva_pfit1)
+a1_opt <- get_model_params(cva_pfit1)[["alpha"]]
+lmbda1_opt <- get_model_params(cva_pfit1)[["lambdaMin"]]
 
 
 ## ----get_best_coef--------------------------------------------------
-coef(cva_pfit1, s = get_model_params(cva_pfit1)$lambdaMin,
-        alpha=get_model_params(cva_pfit1)$alpha)
+coef(cva_pfit1, s = lmbda1_opt, alpha = a1_opt)
 
 
 ## ----save-cva_pfit1-------------------------------------------------
@@ -158,16 +154,17 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
         "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
         "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
         "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
-        "EPHA2.npx","RELT.npx","LTBR.npx","BL_eGFR","log10_B_HBA1C_PRC",
+        "EPHA2.npx","RELT.npx","LTBR.npx","log10_B_HBA1C_PRC",
         "log10_DU_ACR","SEX","AGE_TL")])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])
+y2Surv <- survival::Surv(y2[,"time"], y2[,"status"])
 
 
 ## ----glmnet-pfit2, echo=TRUE, message=FALSE, warning=FALSE----------
 #fit the adjusted cox regression model
-pfit2 <- glmnet(x2, y2, family = "cox", alpha=0)
+pfit2 <- glmnet(x2, y2Surv, family = "cox", alpha=0)
 
 
 
@@ -177,7 +174,7 @@ plot(pfit2, label = TRUE)
 
 ## ---- Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE-----
 #fit the cross-validatedmodel
-cvfit2 <- cv.glmnet(x2, y2, family = "cox", alpha=0)
+cvfit2 <- cv.glmnet(x2, y2Surv, family = "cox", alpha=0)
 
 plot(cvfit2, label = TRUE) 
 
@@ -205,30 +202,109 @@ coef(cvfit2)
 
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit2 <- cva.glmnet(x=x2,y=y2,family = "cox", alpha = alphv)
+cva_pfit2 <- cva.glmnet(x=x2,y=y2Surv,family = "cox", alpha = alphv)
 minlossplot(cva_pfit2)
 
 
 ## ----get_best_params_M2---------------------------------------------
-# Extract the best parameters from cva.glmnet object.
-get_model_params <- function(fit) {
-  alpha <- fit$alpha
-  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
-  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
-  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
-  best <- which.min(error)
-  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
-             lambdaSE = lambdaSE[best], eror = error[best])
-}
 
-get_model_params(cva_pfit2)	
+(pfit2_params <- get_model_params(cva_pfit2))
+
+a2_opt <- pfit2_params[["alpha"]]
+lmbda2_opt <- pfit2_params[["lambdaMin"]]
 
 
 ## ----get_best_coef_M2-----------------------------------------------
-coef(cva_pfit2, s = get_model_params(cva_pfit2)$lambdaMin,
-        alpha=get_model_params(cva_pfit2)$alpha)
+
+coef(cva_pfit2, s = lmbda2_opt, alpha = a2_opt)
 
 
-## ----save-cva_pfit1_M2----------------------------------------------
+## ----pfit2_a-object-------------------------------------------------
+pfit2_aopt <- glmnet(x2, y2Surv, family = "cox", alpha= a2_opt)
+
+
+## ----surv-plot------------------------------------------------------
+# survfit object for penalized Cox model
+sf0 <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv)
+plot(sf0)
+
+
+## ----surv-plot-mean-------------------------------------------------
+x2mean <- apply(x2, 2, mean)
+sfm <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv, newx = x2mean)
+# plot(sfm)
+
+
+## ----Prepare-test-data-M2-------------------------------------------
+dim(data_drop_na2)
+test_rows <- 1:17    # Select rows for testing. Possibly all rows in data_drop_na2.
+x2_test <- x2[test_rows,]
+y2_test <- y2[test_rows,]
+y2Surv_test <- survival::Surv(y2_test[,"time"], y2_test[,"status"] )
+
+data2_test <- data_drop_na2[test_rows, ]
+range(data2_test$time)
+
+
+## ----calc-pred2-vals------------------------------------------------
+pred_lpmtx <- predict(pfit2_aopt, newx = x2_test, type = "link") # Matrix
+pred_lp <- predict(pfit2_aopt, newx = x2_test, type = "link", s = lmbda2_opt)
+
+
+## ----C-index-M2-----------------------------------------------------
+apply(pred_lpmtx, 2, Cindex, y = y2Surv_test) # Multiple lambda
+Cindex(pred_lp, y2Surv_test)                  # Optimal lambda
+
+
+## ----surv-roc-------------------------------------------------------
+                
+## Augment `data2_test` with linear predictor
+ data2_test$lp <- pred_lp
+ 
+
+
+## Define a helper function to evaluate at various t
+survivalROC_helper <- function(t) {
+    survivalROC(Stime        = data2_test$time,
+                status       = data2_test$status,
+                marker       = data2_test$lp,
+                predict.time = t,
+                method       = "NNE",
+                span = 0.25 * nrow(data_drop_na2)^(-0.20))
+}
+
+## Evaluate every 3 years
+survivalROC_data <- tibble(t = 3* c(1,2,3,4,5)) %>%
+    mutate(survivalROC = map(t, survivalROC_helper),
+           ## Extract scalar AUC
+           auc = map_dbl(survivalROC, magrittr::extract2, "AUC"),
+           ## Put cut off dependent values in a data_frame
+           df_survivalROC = map(survivalROC, function(obj) {
+               as_tibble(obj[c("cut.values","TP","FP")])
+           })) %>%
+           select(-survivalROC) %>%
+    unnest(df_survivalROC) %>%
+    arrange(t, FP, TP)
+    
+# survivalROC_data %>% print (n=100)
+
+
+## ----surv-roc-plot--------------------------------------------------
+## Plot Time-dependent ROC every 3 years
+survivalROC_data %>%
+    ggplot(mapping = aes(x = FP, y = TP)) +
+    geom_point() +
+    geom_line() +
+    geom_label(data = survivalROC_data %>% select(t,auc) %>% unique,
+               mapping = aes(label = sprintf("%.3f", auc)), x = 0.5, y = 0.5) +
+    facet_wrap( ~ t) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+          legend.key = element_blank(),
+          plot.title = element_text(hjust = 0.5),
+          strip.background = element_blank())
+
+
+## ----save-cva_pfit2_M2----------------------------------------------
 save(cva_pfit2, file = "./save/21Cox-Reg1-save2.Rdata")
 

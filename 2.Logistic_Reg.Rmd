@@ -36,6 +36,11 @@ pacman::p_load(
   )
 ```
 
+```{r utilsag}
+if (!require('utilsag')) devtools::install_github("agalecki/utilsag", ref = "version-0.07")
+library(utilsag)
+```
+
 # Introduction
 
 In this report we consider two logistic regression models for the  `status` (0/1) variable:
@@ -103,6 +108,14 @@ class(pfit)
 ```
 
 ## Extracting info from Model M1
+
+### Tidy results
+
+```{r mytidy-pfit}
+myglance(pfit)
+mytidy(pfit)
+```
+
 
 ...
 
