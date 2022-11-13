@@ -63,7 +63,7 @@ by executing Descriptive Statistics script
 
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR))
+scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR))  %>% filter(time>0)
 
 dim(scrambled) # Number of rows and columns in the input data
 
