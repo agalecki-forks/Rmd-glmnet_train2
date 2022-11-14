@@ -63,7 +63,7 @@ by executing Descriptive Statistics script
 
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR))  %>% filter(time>0)
+scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR)) %>% filter(time>0)
 
 dim(scrambled) # Number of rows and columns in the input data
 
@@ -293,7 +293,7 @@ plot(pfit2, label = TRUE)
 
 ```{r, Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
-cvfit2 <- cv.glmnet(x2, y2Surv, family = "cox", alpha=0)
+cvfit2 <- cv.glmnet(x2, y2Surv, family = "cox", type.measure = "C", alpha=0)
 
 plot(cvfit2, label = TRUE) 
 ```
@@ -339,7 +339,7 @@ source: (https://glmnet.stanford.edu/articles/glmnet.html)
 
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit2 <- cva.glmnet(x=x2,y=y2Surv,family = "cox", alpha = alphv)
+cva_pfit2 <- cva.glmnet(x=x2,y=y2Surv,family = "cox", type.measure = "C", alpha = alphv)
 minlossplot(cva_pfit2)
 ```
 
