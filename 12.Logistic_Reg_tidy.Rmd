@@ -55,8 +55,7 @@ Data are prepared for "unadjusted" logistic regression (Model M1)
 
 ```{r, readxl-data, echo=TRUE, message=FALSE, warning=FALSE}
 #read the data that is stored under the data folder
-
-xlsx_path = "./Data/jnpx_scrambled_053122.xlsx"
+xlsx_path = "./Data/data_example.xlsx"
 data_orig <- readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 
 dim(data_orig)

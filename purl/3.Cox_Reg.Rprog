@@ -34,8 +34,7 @@ pacman::p_load(
 
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled <- scrambled  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),
-                                   log10_DU_ACR=log10(DU_ACR))
+scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR))  %>% filter(time>0)
 
 dim(scrambled) # Number of rows and columns in the input data
 
@@ -140,7 +139,7 @@ data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
          "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
          "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
          "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
-         "time","status","BL_eGFR","log10_B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL") 
+         "time","status","BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL") 
 dim(data2)         
 
 #drop any records with NA
@@ -154,8 +153,8 @@ x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
         "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
         "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
         "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
-        "EPHA2.npx","RELT.npx","LTBR.npx","log10_B_HBA1C_PRC",
-        "log10_DU_ACR","SEX","AGE_TL")])
+        "EPHA2.npx","RELT.npx","LTBR.npx","B_HBA1C_PRC",
+        "log10_DU_ACR","BL_eGFR","SEX","AGE_TL")])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])

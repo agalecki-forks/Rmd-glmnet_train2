@@ -223,7 +223,7 @@ coef(cva_pfit1, s = lmbda1_opt, alpha = a1_opt)
 Save `cva_pfit1` object for post-processing
 
 ```{r save-cva_pfit1}
-save(cva_pfit1, file = "./save/21Cox-Reg1-save1.Rdata")
+save(cva_pfit1, file = "./save/21Cox-Reg2a-save1.Rdata")
 ```
 
 
@@ -498,5 +498,5 @@ survivalROC_data %>%
 * Save `cva_pfit2` object for post-processing
 
 ```{r save-cva_pfit2_M2}
-save(cva_pfit2, file = "./save/21Cox-Reg1-save2.Rdata")
+save(cva_pfit2, file = "./save/21Cox-Reg2a-save2.Rdata")
 ```
