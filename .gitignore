@@ -8,6 +8,7 @@
 # .Rprog
 *.Rprog
 save/*.Rdata
+save/*.rds
 
 # History files
 .Rhistory
