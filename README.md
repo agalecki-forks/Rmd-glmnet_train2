@@ -57,3 +57,6 @@ colnames(x)
 
 https://cran.r-project.org/web/packages/plsmselect/vignettes/plsmselect.html
 
+## Links
+
+[Analysis of High-Dimensional Data by Stadler](https://bookdown.org/staedler_n/highdimstats/)
