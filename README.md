@@ -8,6 +8,7 @@
 ## Interactions
 
 https://stackoverflow.com/questions/27580267/how-to-make-all-interactions-before-using-glmnet
+https://stats.stackexchange.com/questions/244729/lasso-with-interaction-terms-is-it-okay-if-main-effects-are-shrunk-to-zero
 
 
 ```
