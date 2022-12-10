@@ -45,6 +45,7 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
+
 xvars1 <- c(surv_vars, prot_npx)
  
 data <- scrambled  %>% select(all_of(xvars1)) 
@@ -133,13 +134,12 @@ save(cva_pfit1, file = "./save/21Cox-Reg1-save1.Rdata")
 
 ## ---- Adjusted, echo=TRUE, message=FALSE, warning=FALSE-------------
 
-#select variables for adjusted model
-data2 <- scrambled  %>% select("KIM1.npx","SYND1.npx","IL.1RT1.npx","WFDC2.npx",
-         "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx","EDA2R.npx",
-         "TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", 
-         "EFNA4.npx","TNF.R2.npx" , "DLL1.npx" ,"TNFRSF6B.npx", 
-         "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx",
-         "time","status","BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL") 
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+xvars2 <- c(surv_vars, clin_vars, prot_npx)
+ 
+data2 <- scrambled  %>% select(all_of(xvars2)) 
+
+#drop any records with NA
 dim(data2)         
 
 #drop any records with NA
@@ -149,12 +149,7 @@ data_drop_na2 <- data2 %>% drop_na()
 nrow(data_drop_na2)
 
 #includes all proteins after excluding missing data
-x2 <- data.matrix(data_drop_na2[,c("KIM1.npx","SYND1.npx","IL.1RT1.npx",
-        "WFDC2.npx", "CD27.npx", "TNFRSF10A.npx","LAYN.npx","PVRL4.npx",
-        "EDA2R.npx","TNFRSF4.npx", "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx",
-        "EFNA4.npx","TNF.R2.npx","DLL1.npx" ,"TNFRSF6B.npx", "CD160.npx",
-        "EPHA2.npx","RELT.npx","LTBR.npx","B_HBA1C_PRC",
-        "log10_DU_ACR","BL_eGFR","SEX","AGE_TL")])
+x2 <- data.matrix(data_drop_na2[,c(prot_npx, clin_vars)])
 
 #select follow-up time and status
 y2 <- data.matrix(data_drop_na2[,c("time","status")])
@@ -236,7 +231,7 @@ sfm <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv, newx = 
 
 ## ----Prepare-test-data-M2-------------------------------------------
 dim(data_drop_na2)
-test_rows <- 1:17    # Select rows for testing. Possibly all rows in data_drop_na2.
+test_rows <- 1:35    # Select rows for testing. Possibly all rows in data_drop_na2.
 x2_test <- x2[test_rows,]
 y2_test <- y2[test_rows,]
 y2Surv_test <- survival::Surv(y2_test[,"time"], y2_test[,"status"] )
@@ -306,4 +301,18 @@ survivalROC_data %>%
 
 ## ----save-cva_pfit2_M2----------------------------------------------
 save(cva_pfit2, file = "./save/21Cox-Reg1-save2.Rdata")
+
+
+## ----tidy-M2opt-----------------------------------------------------
+library(survival)
+library(censored)
+library(dplyr)
+library(tidyr)
+
+mod2 <- 
+  proportional_hazards(penalty = lmbda2_opt, mixture = a2_opt) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = data_drop_na2)
+class(mod2)
+
 
