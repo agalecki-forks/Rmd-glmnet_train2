@@ -41,21 +41,23 @@ pacman::p_load(
 
 # Introduction
 
-In this report we consider two Cox regression models for the  time-to-event `time` variable. Originally this 
+In this report we consider three Cox regression models for the  time-to-event `time` variable. Originally this 
 variable was named `FU_TIME`.  
 
 `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
 
-* M1: Contains 21 proteins as candidate covariates
-* M2 :Contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate covariates
+* M0: Contains Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors
+
+* M1: Contains 21 proteins as candidate predictors
+
+* M2 :Contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors
 
 We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 
-# glmnet for Model M1 ($\alpha=0$)
 
-## Data preparation
+## Data prep
 
-Data are prepared for "unadjusted" Cox regression (Model M1). Note that input data called `scrambled` was created
+Data are prepared for Cox regression. Note that input data called `scrambled` was created
 by executing Descriptive Statistics script       
 
 ```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
@@ -63,38 +65,208 @@ by executing Descriptive Statistics script
 
 scrambled<-readRDS(file = "./Data/scrambled.rds")
 
-scrambled <- scrambled  %>% mutate(log10_DU_ACR=log10(DU_ACR))  %>% filter(time>0)
+scrambled <- scrambled  %>% mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
 
 dim(scrambled) # Number of rows and columns in the input data
 
-#select variables for unadjusted cox regression model
+# variables used in Cox regression model
 prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
               "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
               "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+```
 
-xvars1 <- c(surv_vars, prot_npx)
+???- M0-starts
+
+# glmnet for Model M0 ($\alpha=0$)
+
+
+## Data for M0
+
+Data are prepared for Cox regression (Model M0).
+
+```{r create-data-drop-na0}
+xvars0 <- c(surv_vars, clin_vars)
  
-data <- scrambled  %>% select(all_of(xvars1)) 
+data0 <- scrambled  %>% select(all_of(xvars0)) 
 
 #drop any records with NA
-data_drop_na1 <- data %>% drop_na()    
+data_drop_na0 <- data0 %>% drop_na()    
+
+# Total sample size and number of columns
+dim(data_drop_na0)
+
+#includes all proteins after excluding missing data
+x0 <- data.matrix(data_drop_na0[, clin_vars])
+dim(x0)
+colnames(x0)  # 5 clinical predictors
+
+# time and status
+tx <- data.matrix(data_drop_na0[,c("time","status")])
+ty    <- tx[, "time"]
+stx <- tx[,"status"]
+ySurv0 <- survival::Surv(ty, stx)   
+table(data_drop_na0$status) # 0-censored, 1-observed time-to-ESKD
+```
+
+## Model M0 fit $\alpha=0$
+
+* By default mixing (hyper) parameter $\alpha$ is equal to $1$ (lasso)
+* In this example we arbitrarily assume $\alpha$ is equal to $0$ (ridge regression)
+
+
+```{r Unadjusted-M0, echo =TRUE, message=FALSE, warning=FALSE}
+#fit the unadjusted cox regression model
+pfit0 <- glmnet(x0, ySurv0, family = "cox", alpha=0)
+class(pfit0)
+```
+          
+## Extracting info from Model M0 fit
+
+
+
+###  Model M0 Coefficients Profile Plots
+
+* (Standardized) coefficients plotted versus ${\ell}_1$-norm (using `plot()` function:
+
+```{r, coefficient-profile-plot0, echo=TRUE, message=FALSE}
+plot(pfit0, label = TRUE) 
+```
+
+"Each curve corresponds to a variable. It shows the path of its coefficient 
+against the ${\ell}_1$-norm of the whole 
+coefficient vector as $\lambda$ varies. The axis above indicates 
+the number of nonzero coefficients at the current $\lambda$,
+which is the effective degrees of freedom (df) for the lasso."
+
+source: ("https://glmnet.stanford.edu/articles/glmnet.html")
+
+# cv.glmnet for M0 ($\alpha=0$)
+
+## C-V for M0 ($\alpha=0$)
+
+* Cross-Validated Cox Regression Model Coefficient Plot for Model M0
+
+```{r, Unadjusted_cv_plot0, echo=TRUE, message=FALSE}
+set.seed(1)
+#fit the cross-validated model
+cvfit0 <- cv.glmnet(x0, ySurv0, family = "cox", alpha=0)
+plot(cvfit0, label = TRUE) 
+```
+
+"This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves
+along the $\lambda$ sequence (error bars). Two special values along the $\lambda$ sequence are indicated by the 
+vertical dotted lines. `lambda.min` is the value of $\lambda$ that gives minimum mean cross-validated error, 
+while `lambda.1se` is the value of $\lambda$ that gives the most regularized model such that the cross-validated 
+error is within one standard error of the minimum."
+
+source: ("https://glmnet.stanford.edu/articles/glmnet.html")
+
+## Extract info from C-V (M0)
+
+### minimal lambda value
+
+* Unadjusted Cross-Validated Cox Regression Coefficients using `lambda.min` value 
+* get the minimal lambda value (value of lambda that gives minimum cvm)
+
+```{r, Unadjusted-M0-cv_min, echo=TRUE, message=FALSE, warning=FALSE}
+cvfit0$lambda.min
+coef(cvfit0, s = "lambda.min")
+```
+
+### lambda.lse
+
+* Unadjusted Cross-Validated Cox Regression Coefficients using `lambda.lse`
+* `lambda.min` is the largest value of lambda such that error is within 1 standard error of the minimum.
+# Cross-validated coefficients of the Cox Regression Model using the lambda.lse
+
+```{r, Unadjusted-M0-cv-lse, echo=TRUE, message=FALSE, warning=FALSE}
+cvfit0$lambda.1se
+coef(cvfit0)  # By default s = "lambda.min"
+```
+
+# glmnetUtils (M0)
+
+* Glmnet models fitted for multiple alpha 
+* We use cross-validation to tune hyperparameter $\alpha$.
+* The idea of "explicitly control the fold" is implemented in `glmnetUtils` package
+* The `cva.glmnet` function does simultaneous cross-validation for both the $\alpha$ and $\lambda$ parameters in an elastic net model.
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+```{r glmnetUtils-M0}
+
+set.seed(46)
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit0 <- cva.glmnet(x=x0,y=ySurv0,family = "cox", alpha = alphv)
+minlossplot(cva_pfit0)
+```
+
+Extract the optimal (hyper)parameters from `cva.glmnet` object
+
+```{r get_best_params-M0}
+# Extract the best parameters from cva.glmnet object.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+get_model_params(cva_pfit0)
+a0_opt <- get_model_params(cva_pfit0)[["alpha"]]
+lmbda0_opt <- get_model_params(cva_pfit0)[["lambdaMin"]]
+```
+
+Cox regression coefficients for Model M1 using the optimal combination of (hyper)parameters
+
+```{r get_best_coef-M0}
+coef(cva_pfit0, s = lmbda0_opt, alpha = a0_opt)
+```
+
+Save `cva_pfit0` object for post-processing
+
+```{r save-cva_pfit0}
+save(cva_pfit0, file = "./save/21Cox-Reg1-save0.Rdata")
+```
+
+
+???-M0
+
+# glmnet for Model M1 ($\alpha=0$)
+
+
+## Data for M1
+
+Data are prepared for Cox regression (Model M1).
+
+```{r create-data-drop-na1}
+xvars1 <- c(surv_vars, prot_npx)
+ 
+data1 <- scrambled  %>% select(all_of(xvars1)) 
+
+#drop any records with NA
+data_drop_na1 <- data1 %>% drop_na()    
 
 # Total sample size and number of columns
 dim(data_drop_na1)
 
 #includes all proteins after excluding missing data
-x <- data.matrix(data_drop_na1[, prot_npx])
-dim(x)
-colnames(x)  # 21 proteins
+x1 <- data.matrix(data_drop_na1[, prot_npx])
+dim(x1)
+colnames(x1)  # 21 proteins
 
 # time and status
 tx <- data.matrix(data_drop_na1[,c("time","status")])
 ty    <- tx[, "time"]
 stx <- tx[,"status"]
-ySurv <- survival::Surv(ty, stx)   
+ySurv1 <- survival::Surv(ty, stx)   
 table(data_drop_na1$status) # 0-censored, 1-observed time-to-ESKD
 ```
 
@@ -104,10 +276,10 @@ table(data_drop_na1$status) # 0-censored, 1-observed time-to-ESKD
 * In this example we arbitrarily assume $\alpha$ is equal to $0$ (ridge regression)
 
 
-```{r, Unadjusted, echo=TRUE, message=FALSE, warning=FALSE}
+```{r Unadjusted, echo =TRUE, message=FALSE, warning=FALSE}
 #fit the unadjusted cox regression model
-pfit <- glmnet(x, ySurv, family = "cox", alpha=0)
-class(pfit)
+pfit1 <- glmnet(x1, ySurv1, family = "cox", alpha=0)
+class(pfit1)
 ```
           
 ## Extracting info from Model M1 fit
@@ -119,7 +291,7 @@ class(pfit)
 * (Standardized) coefficients plotted versus ${\ell}_1$-norm (using `plot()` function:
 
 ```{r, coefficient-profile-plot1, echo=TRUE, message=FALSE}
-plot(pfit, label = TRUE) 
+plot(pfit1, label = TRUE) 
 ```
 
 "Each curve corresponds to a variable. It shows the path of its coefficient 
@@ -133,7 +305,7 @@ source: ("https://glmnet.stanford.edu/articles/glmnet.html")
 * Dynamic plot of (standardized) coefficients plotted versus $\log(\lambda)$ using `coefplot::coefpath`:
 
 ```{r, coefficient-profile-plot12, echo=TRUE, message=FALSE, warning=FALSE}
-coefpath(pfit) 
+coefpath(pfit1) 
 ```
 
 # cv.glmnet for M1 ($\alpha=0$)
@@ -143,8 +315,9 @@ coefpath(pfit)
 * Cross-Validated Cox Regression Model Coefficient Plot for Model M1
 
 ```{r, Unadjusted_cv_plot, echo=TRUE, message=FALSE}
+set.seed(111)
 #fit the cross-validated model
-cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=0)
+cvfit1 <- cv.glmnet(x1, ySurv1, family = "cox", alpha=0)
 plot(cvfit1, label = TRUE) 
 ```
 
@@ -192,7 +365,7 @@ source: (https://glmnet.stanford.edu/articles/glmnet.html)
 
 set.seed(46)
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit1 <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv)
+cva_pfit1 <- cva.glmnet(x=x1,y=ySurv1,family = "cox", alpha = alphv)
 minlossplot(cva_pfit1)
 ```
 
@@ -237,8 +410,7 @@ save(cva_pfit1, file = "./save/21Cox-Reg1-save1.Rdata")
 
 ```{r, Adjusted, echo=TRUE, message=FALSE, warning=FALSE}
 
-clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
-xvars2 <- c(surv_vars, clin_vars, prot_npx)
+xvars2 <- c(surv_vars,  prot_npx, clin_vars)
  
 data2 <- scrambled  %>% select(all_of(xvars2)) 
 
@@ -287,6 +459,7 @@ plot(pfit2, label = TRUE)
 * Adjusted Cross-Validated Cox Regression Model Coefficient Plot
 
 ```{r, Adjusted_cv_plot, echo=TRUE, message=FALSE, warning=FALSE}
+set.seed(222)
 #fit the cross-validatedmodel
 cvfit2 <- cv.glmnet(x2, y2Surv, family = "cox", alpha=0)
 
@@ -370,7 +543,7 @@ Notes:
 pfit2_aopt <- glmnet(x2, y2Surv, family = "cox", alpha= a2_opt)
 ```
 
-```{r surv-plot}
+```{r surv2-plot}
 # survfit object for penalized Cox model
 sf0 <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv)
 plot(sf0)
@@ -414,8 +587,8 @@ range(data2_test$time)
 Step 3: Calculate predicted values for test data
 
 ```{r calc-pred2-vals}
-pred_lpmtx <- predict(pfit2_aopt, newx = x2_test, type = "link") # Matrix
-pred_lp <- predict(pfit2_aopt, newx = x2_test, type = "link", s = lmbda2_opt)
+predM2_lpmtx <- predict(pfit2_aopt, newx = x2_test, type = "link") # Matrix
+predM2_lp <- predict(pfit2_aopt, newx = x2_test, type = "link", s = lmbda2_opt)
 ```
 
 ## Predictive performance of optimal M2
@@ -428,8 +601,8 @@ and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pa
 
 
 ```{r C-index-M2}
-apply(pred_lpmtx, 2, Cindex, y = y2Surv_test) # Multiple lambda
-Cindex(pred_lp, y2Surv_test)                  # Optimal lambda
+apply(predM2_lpmtx, 2, Cindex, y = y2Surv_test) # Multiple lambda
+Cindex(predM2_lp, y2Surv_test)                  # Optimal lambda
 ```
 
 ### Time-dependent ROC
@@ -507,6 +680,35 @@ library(dplyr)
 library(tidyr)
 ```
 
+
+## Model M0
+
+Create `mod0_all` object.
+
+```{r tidy-M0-all}
+# M0 for all alpha
+mod0_all <- map(alphv, function(a){
+  proportional_hazards(penalty = tune(), mixture = a) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = data_drop_na0)
+})
+length(mod0_all)
+tmp <- mod0_all[[2]]
+class(tmp)
+
+```
+
+* Create `mod0_opt` object
+
+```{r tidy-M0-opt}
+mod0_opt <- 
+  proportional_hazards(penalty = lmbda0_opt, mixture = a0_opt) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = data_drop_na0)
+class(mod0_opt)
+```
+??? M0-end
+
 ## Model M1
 
 Create `mod1_all` object.
@@ -575,15 +777,16 @@ colnames(pred_surv)
 ```{r tidy-survtime-M2}
 colnames(data2_test)
 
-predict(mod2_opt, data2_test, type = "time") %>% 
- # select(.pred_time, time, status, lp)%>%
- print(n=100)
+pred_M2 <-predict(mod2_opt, data2_test, type = "time") %>% 
+ cbind(data2_test) %>%
+ select(.pred_time, time, status, lp)%>%
+ print(n=30)
 ```
 
 
 * save tidy objects
 
 ```{r save-tidy}
-save(mod1_all, mod1_opt, mod2_opt, mod2_all, file ="./save/3Coxreg1-tidy-save.Rdata")
+save(mod0_all, mod0_opt, mod1_all, mod1_opt, mod2_opt, mod2_all, file ="./save/3Coxreg1-tidy-save.Rdata")
 ```
 
