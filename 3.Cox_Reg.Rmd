@@ -38,6 +38,10 @@ pacman::p_load(
   survivalROC   #survivalROC
   )
 ```
+```{r utilsag}
+if (!require('utilsag')) devtools::install_github("agalecki/utilsag") #, ref = "version-0.1.1")
+library(utilsag)
+```
 
 # Introduction
 
@@ -63,7 +67,7 @@ by executing Descriptive Statistics script
 ```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
 #read the data that is stored under the data folder
 
-scrambled<-readRDS(file = "./Data/scrambled.rds")
+scrambled <- readRDS(file = "./Data/scrambled.rds")
 
 scrambled <- scrambled  %>% mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
 
@@ -89,9 +93,9 @@ clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 Data are prepared for Cox regression (Model M0).
 
 ```{r create-data-drop-na0}
-xvars0 <- c(surv_vars, clin_vars)
+vars0 <- c(surv_vars, clin_vars)
  
-data0 <- scrambled  %>% select(all_of(xvars0)) 
+data0 <- scrambled  %>% select(all_of(vars0)) 
 
 #drop any records with NA
 data_drop_na0 <- data0 %>% drop_na()    
@@ -118,7 +122,7 @@ table(data_drop_na0$status) # 0-censored, 1-observed time-to-ESKD
 * In this example we arbitrarily assume $\alpha$ is equal to $0$ (ridge regression)
 
 
-```{r Unadjusted-M0, echo =TRUE, message=FALSE, warning=FALSE}
+```{r Unadjusted-M0, echo = TRUE, message= FALSE, warning=FALSE}
 #fit the unadjusted cox regression model
 pfit0 <- glmnet(x0, ySurv0, family = "cox", alpha=0)
 class(pfit0)
@@ -247,9 +251,9 @@ save(cva_pfit0, file = "./save/21Cox-Reg1-save0.Rdata")
 Data are prepared for Cox regression (Model M1).
 
 ```{r create-data-drop-na1}
-xvars1 <- c(surv_vars, prot_npx)
+vars1 <- c(surv_vars, prot_npx)
  
-data1 <- scrambled  %>% select(all_of(xvars1)) 
+data1 <- scrambled  %>% select(all_of(vars1)) 
 
 #drop any records with NA
 data_drop_na1 <- data1 %>% drop_na()    
@@ -410,9 +414,9 @@ save(cva_pfit1, file = "./save/21Cox-Reg1-save1.Rdata")
 
 ```{r, Adjusted, echo=TRUE, message=FALSE, warning=FALSE}
 
-xvars2 <- c(surv_vars,  prot_npx, clin_vars)
+vars2 <- c(surv_vars,  prot_npx, clin_vars)
  
-data2 <- scrambled  %>% select(all_of(xvars2)) 
+data2 <- scrambled  %>% select(all_of(vars2)) 
 
 #drop any records with NA
 dim(data2)         
@@ -588,7 +592,8 @@ Step 3: Calculate predicted values for test data
 
 ```{r calc-pred2-vals}
 predM2_lpmtx <- predict(pfit2_aopt, newx = x2_test, type = "link") # Matrix
-predM2_lp <- predict(pfit2_aopt, newx = x2_test, type = "link", s = lmbda2_opt)
+predM2_lp <- as.vector(predict(pfit2_aopt, newx = x2_test, type = "link", s = lmbda2_opt))
+summary(predM2_lp)
 ```
 
 ## Predictive performance of optimal M2
@@ -614,52 +619,22 @@ Cindex(predM2_lp, y2Surv_test)                  # Optimal lambda
 ```{r surv-roc}
                 
 ## Augment `data2_test` with linear predictor
- data2_test$lp <- pred_lp
+ data2_test$predM2_lp <- predM2_lp
+
+# Evaluate every 2.5 years
  
+tx <- 2.5* c(2,3,4,5,6) # ROC time points
 
-
-## Define a helper function to evaluate at various t
-survivalROC_helper <- function(t) {
-    survivalROC(Stime        = data2_test$time,
-                status       = data2_test$status,
-                marker       = data2_test$lp,
-                predict.time = t,
-                method       = "NNE",
-                span = 0.25 * nrow(data_drop_na2)^(-0.20))
-}
-
-## Evaluate every 2.5 years
-survivalROC_data <- tibble(t = 2.5* c(2,3,4,5,6)) %>%
-    mutate(survivalROC = map(t, survivalROC_helper),
-           ## Extract scalar AUC
-           auc = map_dbl(survivalROC, magrittr::extract2, "AUC"),
-           ## Put cut off dependent values in a data_frame
-           df_survivalROC = map(survivalROC, function(obj) {
-               as_tibble(obj[c("cut.values","TP","FP")])
-           })) %>%
-           select(-survivalROC) %>%
-    unnest(df_survivalROC) %>%
-    arrange(t, FP, TP)
-    
+survROC_lp2 <- create_survivalROC_data(tx, data2_test, predM2_lp)
+ 
 # survivalROC_data %>% print (n=100)
 ```
 
-* Plot Time-dependent ROC every 3 years
+* Plot Time-dependent ROC every 2.5 years
 
 ```{r surv-roc-plot}
-## Plot Time-dependent ROC every 3 years
-survivalROC_data %>%
-    ggplot(mapping = aes(x = FP, y = TP)) +
-    geom_point() +
-    geom_line() +
-    geom_label(data = survivalROC_data %>% select(t,auc) %>% unique,
-               mapping = aes(label = sprintf("%.3f", auc)), x = 0.5, y = 0.5) +
-    facet_wrap( ~ t) +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
-          legend.key = element_blank(),
-          plot.title = element_text(hjust = 0.5),
-          strip.background = element_blank())
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp2) 
 ```
 
 
@@ -777,10 +752,14 @@ colnames(pred_surv)
 ```{r tidy-survtime-M2}
 colnames(data2_test)
 
-pred_M2 <-predict(mod2_opt, data2_test, type = "time") %>% 
+pred_M2tidy <- predict(mod2_opt, data2_test, type = "time") %>% 
  cbind(data2_test) %>%
- select(.pred_time, time, status, lp)%>%
- print(n=30)
+ select(.pred_time, time, status, predM2_lp) %>%
+ rename(predM2_time = .pred_time) %>% as_tibble()
+ 
+pred_M2tidy %>% print(n=30)
+plot(pred_M2tidy$predM2_time, pred_M2tidy$time)
+
 ```
 
 
