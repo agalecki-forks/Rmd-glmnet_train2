@@ -340,21 +340,22 @@ summary(predM2_lp)
 
 ## ----C-index-M2-----------------------------------------------------
 apply(predM2_lpmtx, 2, Cindex, y = y2Surv_test) # Multiple lambda
-Cindex(predM2_lp, y2Surv_test)                  # Optimal lambda
+Cindex(predM2_lp, y2Surv_test)                  # For optimal lambda
 
 
 ## ----surv-roc-------------------------------------------------------
+dataM2_test <- data2_test
                 
-## Augment `data2_test` with linear predictor
- data2_test$predM2_lp <- predM2_lp
+## Augment `dataM2_test` with linear predictor
+ dataM2_test$predM2_lp <- predM2_lp
 
 # Evaluate every 2.5 years
  
 tx <- 2.5* c(2,3,4,5,6) # ROC time points
 
-survROC_lp2 <- create_survivalROC_data(tx, data2_test, predM2_lp)
+survROC_lp2 <- create_survivalROC_data(tx, dataM2_test, predM2_lp)
  
-# survivalROC_data %>% print (n=100)
+# survROC_lp2 %>% print (n=100)
 
 
 ## ----surv-roc-plot--------------------------------------------------
@@ -437,20 +438,51 @@ class(mod2_opt)
 
 ## ----tidy-survprob-M2-----------------------------------------------
 # Predicted survival probabilities for different subjects
-pred_surv <- predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>% 
-  # bind_cols(data2_test) %>% 
-  unnest(.pred)
-colnames(pred_surv)
+predM2_survprob <- predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>%
+   rename(predM2_survprob = .pred)
+predM2_survprob %>% print(n=5)
+
+predM2_survprob_u <- predM2_survprob %>% 
+  bind_cols(data2_test) %>% 
+  unnest(predM2_survprob)
+colnames(predM2_survprob_u)
 
 
 ## ----tidy-survtime-M2-----------------------------------------------
-colnames(data2_test)
 
-pred_M2tidy <- predict(mod2_opt, data2_test, type = "time") %>% 
- cbind(data2_test) %>%
- select(.pred_time, time, status, predM2_lp)
+predM2_time <- predict(mod2_opt, data2_test, type = "time") %>% 
+        rename(predM2_time = .pred_time) %>% as_tibble()
  
-pred_M2tidy %>% print(n=30)
+predM2_time %>% print(n=30)
+# plot(log(pred_M2tidy$predM2_time), log(pred_M2tidy$time))
+
+
+## ----Cindex-tidy-survM2---------------------------------------------
+
+predM2_lp <- predict(mod2_opt, data2_test, type = "linear_pred", increasing = FALSE) %>% 
+               rename(predM2_lp = .pred_linear_pred)
+               
+               
+
+
+## ----cbind-predM2---------------------------------------------------
+M2_pred <- cbind(data2_test, predM2_survprob, predM2_time, predM2_lp ) 
+
+# %>% select(.pred_time, time, status) %>%
+
+summ_M2 <- M2_pred %>%
+                summarize(CindexM2 = Cindex(predM2_time, Surv(time, status)))
+summ_M2$CindexM2  
+
+
+
+## ----ROC-surv-plot-m2tidy-------------------------------------------
+tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+survROC_dataM2 <- create_survivalROC_data(tx, M2_pred, predM2_lp)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_dataM2) 
+
 
 
 ## ----save-tidy------------------------------------------------------

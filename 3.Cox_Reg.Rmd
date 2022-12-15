@@ -562,7 +562,7 @@ sfm <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv, newx = 
 ```
 
 
-# Performance of optimal model M2
+# Performance of M2
 
 This section should be considered as an illustration only, because the `glmnet` model
 performance is assessed using training data. For this reason performance of the model
@@ -607,7 +607,7 @@ and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pa
 
 ```{r C-index-M2}
 apply(predM2_lpmtx, 2, Cindex, y = y2Surv_test) # Multiple lambda
-Cindex(predM2_lp, y2Surv_test)                  # Optimal lambda
+Cindex(predM2_lp, y2Surv_test)                  # For optimal lambda
 ```
 
 ### Time-dependent ROC
@@ -615,19 +615,19 @@ Cindex(predM2_lp, y2Surv_test)                  # Optimal lambda
 * source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
 
-
 ```{r surv-roc}
+dataM2_test <- data2_test
                 
-## Augment `data2_test` with linear predictor
- data2_test$predM2_lp <- predM2_lp
+## Augment `dataM2_test` with linear predictor
+ dataM2_test$predM2_lp <- predM2_lp
 
 # Evaluate every 2.5 years
  
 tx <- 2.5* c(2,3,4,5,6) # ROC time points
 
-survROC_lp2 <- create_survivalROC_data(tx, data2_test, predM2_lp)
+survROC_lp2 <- create_survivalROC_data(tx, dataM2_test, predM2_lp)
  
-# survivalROC_data %>% print (n=100)
+# survROC_lp2 %>% print (n=100)
 ```
 
 * Plot Time-dependent ROC every 2.5 years
@@ -644,8 +644,9 @@ plot_timedep_ROC(survROC_lp2)
 save(cva_pfit2, file = "./save/21Cox-Reg1-save2.Rdata")
 ```
 
-# Fit optimal models using tidymodels
+# Tidymodels
 
+Fit optimal models using tidymodels
 Based on (https://parsnip.tidymodels.org/reference/details_proportional_hazards_glmnet.html)
 
 ```{r tidy-libs}
@@ -682,7 +683,6 @@ mod0_opt <-
   fit(Surv(time, status) ~ ., data = data_drop_na0)
 class(mod0_opt)
 ```
-??? M0-end
 
 ## Model M1
 
@@ -735,30 +735,66 @@ mod2_opt <-
 class(mod2_opt)
 ```
 
+# Tidy M2 assessment
+
 * Calculate predicted survival probabilities
 
 ```{r tidy-survprob-M2}
 # Predicted survival probabilities for different subjects
-pred_surv <- predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>% 
-  # bind_cols(data2_test) %>% 
-  unnest(.pred)
-colnames(pred_surv)
+predM2_survprob <- 
+   predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>%
+   rename(predM2_survprob = .pred)
+predM2_survprob %>% print(n=5)
+
+# Unnest tibble
+predM2_survprob_u <- predM2_survprob %>% 
+  bind_cols(data2_test) %>% 
+  unnest(predM2_survprob)
+colnames(predM2_survprob_u)
 ```
-
-
 
 * Predict survival time
 
 ```{r tidy-survtime-M2}
-colnames(data2_test)
 
-pred_M2tidy <- predict(mod2_opt, data2_test, type = "time") %>% 
- cbind(data2_test) %>%
- select(.pred_time, time, status, predM2_lp) %>%
- rename(predM2_time = .pred_time) %>% as_tibble()
+predM2_time <- predict(mod2_opt, data2_test, type = "time") %>% 
+        rename(predM2_time = .pred_time) %>% as_tibble()
  
-pred_M2tidy %>% print(n=30)
-plot(pred_M2tidy$predM2_time, pred_M2tidy$time)
+predM2_time %>% print(n=30)
+# plot(log(pred_M2tidy$predM2_time), log(pred_M2tidy$time))
+```
+
+```{r Cindex-tidy-survM2}
+
+predM2_lp <- predict(mod2_opt, data2_test, type = "linear_pred", increasing = FALSE) %>% 
+               rename(predM2_lp = .pred_linear_pred)
+               
+               
+```
+
+* Bind columns with predicted values  for M2
+
+```{r cbind-predM2}
+M2_pred <- 
+   cbind(data2_test, predM2_time, predM2_lp ) %>% 
+   select(time, status, predM2_time, predM2_lp) %>%
+   as_tibble()
+M2_pred
+
+summ_M2 <- M2_pred %>%
+                summarize(CindexM2 = Cindex(predM2_lp, Surv(time, status)))
+summ_M2$CindexM2  
+
+```
+
+* Linear predictor is used as a marker for ROC curve
+
+```{r ROC-surv-plot-m2tidy}
+tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+survROC_dataM2 <- create_survivalROC_data(tx, M2_pred, predM2_lp)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_dataM2) 
 
 ```
 
