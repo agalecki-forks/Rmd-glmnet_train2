@@ -33,6 +33,31 @@ if (!require('utilsag')) devtools::install_github("agalecki/utilsag") #, ref = "
 library(utilsag)
 
 
+## ----pred-coxnet----------------------------------------------------
+#' Predicted values for _coxnet model
+#'
+#' Invokes `predict._coxnet()` to calculate different types of predicted values for _coxnet model
+#'
+#' @export
+pred_coxnet <- function(model_fit, new_data, 
+                       time_var = time, status_var = status,
+                       time_points = NULL){
+  lin_pred <- predict(model_fit, new_data, type = "linear_pred", increasing = FALSE)
+  time_pred <- predict(model_fit, new_data, type = "time") 
+  tmp <- time_points
+  condt <- !is.null(tmp) && is.numeric(tmp) && length(tmp) > 0
+  survprob <- NULL
+  if (condt) survprob <- predict(model_fit, new_data, type = "survival", time = tmp)
+  tvar <- as.character(substitute(time_var))
+  svar <- as.character(substitute(status_var))
+  cts  <- c(tvar, svar)
+  res <- new_data %>% select(all_of(cts)) %>% cbind(lin_pred, time_pred)
+  if (condt) res <- cbind(res, survprob)
+  as_tibble(res)
+}
+
+
+
 ## ---- prepare-data, echo=TRUE, message=FALSE, warning=FALSE---------
 #read the data that is stored under the data folder
 
@@ -323,12 +348,12 @@ sfm <- survival::survfit(pfit2_aopt, s = lmbda2_opt, x = x2, y = y2Surv, newx = 
 
 ## ----Prepare-test-data-M2-------------------------------------------
 dim(data_drop_na2)
-test_rows <- 1:nrow(x2)    # Select rows for testing. Possibly all rows in data_drop_na2.
-x2_test <- x2[test_rows,]
-y2_test <- y2[test_rows,]
+test_rows2 <- 1:nrow(data_drop_na2) # Select rows for testing. Possibly all rows in data_drop_na2.
+x2_test <- x2[test_rows2,]
+y2_test <- y2[test_rows2,]
 y2Surv_test <- survival::Surv(y2_test[,"time"], y2_test[,"status"] )
 
-data2_test <- data_drop_na2[test_rows, ]
+data2_test <- data_drop_na2[test_rows2, ]
 range(data2_test$time)
 
 
@@ -436,53 +461,46 @@ mod2_opt <-
 class(mod2_opt)
 
 
-## ----tidy-survprob-M2-----------------------------------------------
-# Predicted survival probabilities for different subjects
-predM2_survprob <- predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>%
-   rename(predM2_survprob = .pred)
-predM2_survprob %>% print(n=5)
+## ----pred-coxnet-mod0_opt-------------------------------------------
+tst_rows0 <- 1:nrow(data_drop_na0) # Select rows for testing. Possibly all rows in data_drop_na0.
+dataM0_test <- data_drop_na0[tst_rows0, ]
 
-predM2_survprob_u <- predM2_survprob %>% 
-  bind_cols(data2_test) %>% 
-  unnest(predM2_survprob)
-colnames(predM2_survprob_u)
+pred_M0 <- pred_coxnet(mod0_opt, dataM0_test, time_points = c(5,10))
+pred_M0
 
+pred_M0 %>% unnest(.pred)
 
-## ----tidy-survtime-M2-----------------------------------------------
-
-predM2_time <- predict(mod2_opt, data2_test, type = "time") %>% 
-        rename(predM2_time = .pred_time) %>% as_tibble()
- 
-predM2_time %>% print(n=30)
-# plot(log(pred_M2tidy$predM2_time), log(pred_M2tidy$time))
+summ_M0 <- pred_M0 %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M0$Cindex 
 
 
-## ----Cindex-tidy-survM2---------------------------------------------
-
-predM2_lp <- predict(mod2_opt, data2_test, type = "linear_pred", increasing = FALSE) %>% 
-               rename(predM2_lp = .pred_linear_pred)
-               
-               
-
-
-## ----cbind-predM2---------------------------------------------------
-M2_pred <- cbind(data2_test, predM2_survprob, predM2_time, predM2_lp ) 
-
-# %>% select(.pred_time, time, status) %>%
-
-summ_M2 <- M2_pred %>%
-                summarize(CindexM2 = Cindex(predM2_time, Surv(time, status)))
-summ_M2$CindexM2  
-
-
-
-## ----ROC-surv-plot-m2tidy-------------------------------------------
 tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
-survROC_dataM2 <- create_survivalROC_data(tx, M2_pred, predM2_lp)
+survROC_dataM0 <- create_survivalROC_data(tx, pred_M0, .pred_linear_pred)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_dataM0) 
+
+
+## ----pred-coxnet-mod2_opt-------------------------------------------
+tst_rows2 <- 1:nrow(data_drop_na2) # Select rows for testing. Possibly all rows in data_drop_na2.
+dataM2_test <- data_drop_na2[tst_rows2, ]
+
+pred_M2 <- pred_coxnet(mod2_opt, dataM2_test, time_points = c(5,10))
+# ---pred_M2
+
+# ---pred_M2 %>% unnest(.pred)
+
+summ_M2 <- pred_M2 %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M2$Cindex
+
+
+tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+survROC_dataM2 <- create_survivalROC_data(tx, pred_M2, .pred_linear_pred)
 
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_dataM2) 
-
 
 
 ## ----save-tidy------------------------------------------------------

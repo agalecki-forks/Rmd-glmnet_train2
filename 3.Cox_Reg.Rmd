@@ -58,6 +58,32 @@ variable was named `FU_TIME`.
 
 We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 
+## Auxiliary functions
+
+```{r  pred-coxnet}
+#' Predicted values for _coxnet model
+#'
+#' Invokes `predict._coxnet()` to calculate different types of predicted values for _coxnet model
+#'
+#' @export
+pred_coxnet <- function(model_fit, new_data, 
+                       time_var = time, status_var = status,
+                       time_points = NULL){
+  lin_pred <- predict(model_fit, new_data, type = "linear_pred", increasing = FALSE)
+  time_pred <- predict(model_fit, new_data, type = "time") 
+  tmp <- time_points
+  condt <- !is.null(tmp) && is.numeric(tmp) && length(tmp) > 0
+  survprob <- NULL
+  if (condt) survprob <- predict(model_fit, new_data, type = "survival", time = tmp)
+  tvar <- as.character(substitute(time_var))
+  svar <- as.character(substitute(status_var))
+  cts  <- c(tvar, svar)
+  res <- new_data %>% select(all_of(cts)) %>% cbind(lin_pred, time_pred)
+  if (condt) res <- cbind(res, survprob)
+  as_tibble(res)
+}
+
+```
 
 ## Data prep
 
@@ -478,10 +504,10 @@ plot(cvfit2, label = TRUE)
 
 ```{r, Adjusted_cv_min, echo=TRUE, message=FALSE, warning=FALSE}
 #get the minimal lambda value (value of lambda that gives minimum cvm)
-(l_min <- cvfit2$lambda.min)
+(lmbda_minM2 <- cvfit2$lambda.min)
 
 # Express on natural log scale
-log(l_min)
+log(lmbda_minM2)
 # Cross-validated Cox Regression Model using the minimal lambda
 coef(cvfit2, s = "lambda.min")
 ```
@@ -497,6 +523,53 @@ log(l_1se)
 
 coef(cvfit2)
 ```
+
+??-- M2a starts
+# cv.glmnet for M2a ($\alpha=1$)
+
+
+## C-V for M2a ($\alpha=1$)
+
+* Adjusted Cross-Validated Cox Regression Model Coefficient Plot
+
+```{r, Adjusted_cv_plot-M2a, echo=TRUE, message=FALSE, warning=FALSE}
+set.seed(222)
+#fit the cross-validatedmodel
+cvfit2a <- cv.glmnet(x2, y2Surv, family = "cox", alpha=1)
+
+plot(cvfit2a, label = TRUE) 
+```
+
+
+## Extract info from C-V (M2a)
+### Coefficients for selected $\lambda$
+
+* Adjusted Cross-Validated Cox Regressionn Coefficients using `lambda.min` value
+
+```{r, Adjusted_cv_min-M2a, echo=TRUE, message=FALSE, warning=FALSE}
+#get the minimal lambda value (value of lambda that gives minimum cvm)
+(l_min <- cvfit2a$lambda.min)
+
+# Express on natural log scale
+log(l_min)
+# Cross-validated Cox Regression Model using the minimal lambda
+coef(cvfit2a, s = "lambda.min")
+```
+
+* Adjusted Cross-Validated Cox Regression Coefficients using `lambda.1se`
+* largest value of lambda such that error is within 1 standard error of the minimum.
+
+```{r, Adjusted_cvM2a_lse, echo=TRUE, message=FALSE, warning=FALSE}
+(l_1se <- cvfit2a$lambda.1se)
+
+# Express on natural log scale
+log(l_1se)
+
+coef(cvfit2a)
+```
+
+
+??--
 
 # glmnetUtils (M2)
 
@@ -571,20 +644,20 @@ is too optimistic.
 
 ## Preparatory steps
 
-* Step 1.  Object `pfit2_aopt` contains models for optimal alpha. It was created earlier in this document 
-It contains models for multiple lambdas. 
+* Step 1.  Object `pfit2_aopt` contains model fits for optimal alpha. It was created earlier in this document 
+It contains model fits for multiple lambdas. 
 
 
-Step 2: Prepare test data
+Step 2: Prepare test data for M2
 
 ```{r Prepare-test-data-M2}
 dim(data_drop_na2)
-test_rows <- 1:nrow(x2)    # Select rows for testing. Possibly all rows in data_drop_na2.
-x2_test <- x2[test_rows,]
-y2_test <- y2[test_rows,]
+test_rows2 <- 1:nrow(data_drop_na2) # Select rows for testing. Possibly all rows in data_drop_na2.
+x2_test <- x2[test_rows2,]
+y2_test <- y2[test_rows2,]
 y2Surv_test <- survival::Surv(y2_test[,"time"], y2_test[,"status"] )
 
-data2_test <- data_drop_na2[test_rows, ]
+data2_test <- data_drop_na2[test_rows2, ]
 range(data2_test$time)
 ```
 
@@ -677,6 +750,8 @@ class(tmp)
 * Create `mod0_opt` object
 
 ```{r tidy-M0-opt}
+a0_opt
+lmbda0_opt
 mod0_opt <- 
   proportional_hazards(penalty = lmbda0_opt, mixture = a0_opt) %>% 
   set_engine("glmnet") %>% 
@@ -703,6 +778,9 @@ class(tmp)
 * Create `mod1_opt` object
 
 ```{r tidy-M1-opt}
+a1_opt
+lmbda1_opt
+
 mod1_opt <- 
   proportional_hazards(penalty = lmbda1_opt, mixture = a1_opt) %>% 
   set_engine("glmnet") %>% 
@@ -728,6 +806,9 @@ class(tmp)
 * Create `mod2_opt` object
 
 ```{r tidy-M2-opt}
+a2_opt
+lmbda2_opt
+
 mod2_opt <- 
   proportional_hazards(penalty = lmbda2_opt, mixture = a2_opt) %>% 
   set_engine("glmnet") %>% 
@@ -735,68 +816,87 @@ mod2_opt <-
 class(mod2_opt)
 ```
 
-# Tidy M2 assessment
+# Tidy assessment
 
-* Calculate predicted survival probabilities
+## Model M0
 
-```{r tidy-survprob-M2}
-# Predicted survival probabilities for different subjects
-predM2_survprob <- 
-   predict(mod2_opt, data2_test, type = "survival", time = c(5,10)) %>%
-   rename(predM2_survprob = .pred)
-predM2_survprob %>% print(n=5)
+Create tibble with predicted values for M0:
 
-# Unnest tibble
-predM2_survprob_u <- predM2_survprob %>% 
-  bind_cols(data2_test) %>% 
-  unnest(predM2_survprob)
-colnames(predM2_survprob_u)
-```
+* Linear predictor (`.pred_linear_pred`)
+* Survival time (`.pred_time`)
+* Survival probabilities at selected time points (`.pred`)
 
-* Predict survival time
+```{r  pred-coxnet-mod0_opt}
+tst_rows0 <- 1:nrow(data_drop_na0) # Select rows for testing. Possibly all rows in data_drop_na0.
+dataM0_test <- data_drop_na0[tst_rows0, ]
 
-```{r tidy-survtime-M2}
+pred_M0 <- pred_coxnet(mod0_opt, dataM0_test, time_points = c(5,10))
+pred_M0
 
-predM2_time <- predict(mod2_opt, data2_test, type = "time") %>% 
-        rename(predM2_time = .pred_time) %>% as_tibble()
- 
-predM2_time %>% print(n=30)
-# plot(log(pred_M2tidy$predM2_time), log(pred_M2tidy$time))
-```
+pred_M0 %>% unnest(.pred)
 
-```{r Cindex-tidy-survM2}
+summ_M0 <- pred_M0 %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M0$Cindex 
 
-predM2_lp <- predict(mod2_opt, data2_test, type = "linear_pred", increasing = FALSE) %>% 
-               rename(predM2_lp = .pred_linear_pred)
-               
-               
-```
 
-* Bind columns with predicted values  for M2
-
-```{r cbind-predM2}
-M2_pred <- 
-   cbind(data2_test, predM2_time, predM2_lp ) %>% 
-   select(time, status, predM2_time, predM2_lp) %>%
-   as_tibble()
-M2_pred
-
-summ_M2 <- M2_pred %>%
-                summarize(CindexM2 = Cindex(predM2_lp, Surv(time, status)))
-summ_M2$CindexM2  
-
-```
-
-* Linear predictor is used as a marker for ROC curve
-
-```{r ROC-surv-plot-m2tidy}
 tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
-survROC_dataM2 <- create_survivalROC_data(tx, M2_pred, predM2_lp)
+survROC_dataM0 <- create_survivalROC_data(tx, pred_M0, .pred_linear_pred)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_dataM0) 
+```
+
+
+
+## Model M2
+
+Create tibble with predicted values for M2:
+
+* Linear predictor (`.pred_linear_pred`)
+* Survival time (`.pred_time`)
+* Survival probabilities at selected time points (`.pred`)
+
+```{r  pred-coxnet-mod2_opt}
+tst_rows2 <- 1:nrow(data_drop_na2) # Select rows for testing. Possibly all rows in data_drop_na2.
+dataM2_test <- data_drop_na2[tst_rows2, ]
+
+pred_M2 <- pred_coxnet(mod2_opt, dataM2_test, time_points = c(5,10))
+# ---pred_M2
+
+# ---pred_M2 %>% unnest(.pred)
+
+summ_M2 <- pred_M2 %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M2$Cindex
+
+
+tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+survROC_dataM2 <- create_survivalROC_data(tx, pred_M2, .pred_linear_pred)
 
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_dataM2) 
-
 ```
+
+# Explore mod_all objects
+
+Specify alpha and extract `_coxnet` model fir.
+
+```{r xyz}
+alphv
+alpha1 <- a2_opt
+lmbda1 <- lmbda2_opt
+(idxa <- which(near(alphv, alpha1)))
+
+moda1 <- mod2_all[[idxa]]
+
+tidy_moda1 <- tidy(moda1)
+
+tidy_moda1 %>% filter (near(lambda,lmbda1))
+tidy_moda1 %>% summarize(x = min(lambda))
+```
+
+
 
 
 * save tidy objects
