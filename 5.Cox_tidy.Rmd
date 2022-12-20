@@ -1,5 +1,5 @@
 ---
-title: 'Regularized for Cox Regression Model'
+title: 'Regularized Cox Regression Model'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
 output:
@@ -12,9 +12,10 @@ params:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, comment="#>")
+mod_lbl <- params$mod_lbl # Model label
 ```
 
-```{r, data, echo=FALSE, message=FALSE, warning=FALSE}
+```{r, data, include = FALSE}
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -40,58 +41,41 @@ pacman::p_load(
   survivalROC   #survivalROC
   )
 ```
-```{r utilsag}
+```{r utilsag, include = FALSE}
 if (!require('utilsag')) devtools::install_github("agalecki/utilsag") #, ref = "version-0.1.1")
 library(utilsag)
 ```
 
-# Introduction (`r params$mod_lbl`)
+# Introduction (`r mod_lbl`)
 
-In this report we consider Cox regression model `r params$mod_lbl` for the time-to-event `time` variable. Originally this 
-variable was named `FU_TIME`.  
-
-`status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
+In this report we consider Cox regression model `r mod_lbl` for the time-to-event `time` variable. 
 
 <!-- Conditonal text inserted -->  
-`r if(params$mod_lbl == "M0"){
+`r if(mod_lbl == "M0"){
 "Model M0 contains baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
 }`
 
-`r if(params$mod_lbl == "M1"){
+`r if(mod_lbl == "M1"){
 "Model M1 contains 21 proteins as candidate predictors."
 }`
 
 
-`r if(params$mod_lbl == "M2"){
+`r if(mod_lbl == "M2"){
 "Model M2 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
 }`
+<!-- Conditonal text ends --> 
 
+Notes: 
+
+* Originally `time` variable was named `FU_TIME`.  
+* `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
 
 ## Auxiliary functions
 
-```{r  pred-coxnet}
-#' Predicted values for _coxnet model fit
-#'
-#' Invokes `censored:::predict._coxnet()` to calculate different types of predicted values for _coxnet model
-#'
-#' @export
-pred_coxnet <- function(model_fit, new_data, 
-                       time_var = time, status_var = status,
-                       time_points = NULL){
-  lin_pred <- predict(model_fit, new_data, type = "linear_pred", increasing = FALSE)
-  time_pred <- predict(model_fit, new_data, type = "time") 
-  tmp <- time_points
-  condt <- !is.null(tmp) && is.numeric(tmp) && length(tmp) > 0
-  survprob <- NULL
-  if (condt) survprob <- predict(model_fit, new_data, type = "survival", time = tmp)
-  tvar <- as.character(substitute(time_var))
-  svar <- as.character(substitute(status_var))
-  cts  <- c(tvar, svar)
-  res <- new_data %>% select(all_of(cts)) %>% cbind(lin_pred, time_pred)
-  if (condt) res <- cbind(res, survprob)
-  as_tibble(res)
-}
+Arguments of selected functions in `utilsag` package are shown below:
 
+```{r  pred-coxnet}
+str(formals("pred_censored_coxnet"))
 ```
 
 ## Data prep
@@ -121,10 +105,17 @@ clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 
 * Data preparation
 
-* `vars` vector contains variable names specific to the models considered in this docu,ent
+* `vars` vector contains variable names specific to the model `r mod_lbl` considered in this document
+
+```{r select-vars}
+
+if (mod_lbl == "M0") vars <- c(surv_vars, clin_vars) 
+if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M2") vars <- c(surv_vars,  prot_npx, clin_vars) 
+
+```
 
 ```{r data-prep}
-vars <- c(surv_vars,  prot_npx, clin_vars) # <--??--
 data <- dt  %>% select(all_of(vars)) 
 dim(data)         
 
@@ -136,15 +127,15 @@ nrow(data_drop_na)
 ```
 
 ```{r model-mtx}
-#includes all proteins after excluding missing data
-x <- data.matrix(data_drop_na[,c(prot_npx, clin_vars)])
+# Create X matrix
+x <- data.matrix(subset(data_drop_na, select=-c(time,status)))
 
 #select follow-up time and status
-y <- data.matrix(data_drop_na[,c("time","status")])
-ySurv <- survival::Surv(y[,"time"], y[,"status"])
+y <- data.matrix(data_drop_na[,c("time", "status")])
+ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
-Create cv-folds
+Create cv-folds (10 is default in `cv.glmnet`
 
 ```{r foldid}
 set.seed(1234)
@@ -162,6 +153,7 @@ foldid <- sample(1:10, size = nrow(data_drop_na), replace=TRUE)
 ```{r glmnet-pfit, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cox regression model
 pfit <- glmnet(x, ySurv, family = "cox", alpha=0)
+glance(pfit)
 ```
 
 ## Extracting info from glmnet fit ($\alpha=0$)
@@ -171,7 +163,8 @@ pfit <- glmnet(x, ySurv, family = "cox", alpha=0)
 * Cox Regression Model Coefficient Plot
 
 ```{r, pfit_plot, echo=TRUE, message=FALSE, warning=FALSE}
-plot(pfit, label = TRUE) 
+plot(pfit, label = TRUE)
+myglance(pfit)
 ```
 
 
@@ -190,9 +183,13 @@ cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid)
 plot(cvfit_a0, label = TRUE) 
 ```
 
-
 ### Extract info from C-V ($\alpha=0$)
 
+```{r myglance-cvfit0}
+cvfit_a0_myglance <- myglance(cvfit_a0)
+colnames(cvfit_a0_myglance)
+cvfit_a0_myglance
+```
 
 * Coefficients for selected $\lambda$s
 
@@ -220,7 +217,16 @@ log(lmbda_1se_a0)
 coef(cvfit_a0, s = "lambda.1se")
 ```
 
-???
+Use mytidy() function to extract additional info on optimal lambdas
+
+```{r mytidy-cvfit0}
+(cvfit_a0_mytidy <- mytidy(cvfit_a0))
+cvfit_a0_mytidy %>% filter(step == cvfit_a0_myglance[["index_min"]])
+cvfit_a0_mytidy %>% filter(near(lambda, lmbda_min_a0))
+cvfit_a0_mytidy %>% filter(step == cvfit_a0_myglance[["index_1se"]])
+cvfit_a0_mytidy %>% filter(near(lambda, lmbda_1se_a0))
+
+```
 
 ## cv.glmnet ($\alpha=1$)
 
@@ -238,6 +244,12 @@ plot(cvfit_a1, label = TRUE)
 
 
 ### Extract info from C-V ($\alpha=1$)
+
+```{r myglance-cvfit1}
+cvfit_a1_myglance <- myglance(cvfit_a1)
+colnames(cvfit_a1_myglance)
+cvfit_a1_myglance
+```
 
 
 * Coefficients for selected $\lambda$s
@@ -266,6 +278,18 @@ log(lmbda_1se_a1)
 coef(cvfit_a1, s = "lambda.1se")
 ```
 
+Use mytidy() function to extract additional info on optimal lambdas
+
+```{r mytidy-cvfit1}
+(cvfit_a1_mytidy <- mytidy(cvfit_a1))
+# cvfit_a1_mytidy %>% filter(step == cvfit_a1_myglance[["index_min"]])
+cvfit_a1_mytidy %>% filter(near(lambda, lmbda_min_a1))
+# cvfit_a1_mytidy %>% filter(step == cvfit_a1_myglance[["index_1se"]])
+cvfit_a1_mytidy %>% filter(near(lambda, lmbda_1se_a1))
+
+```
+
+
 # glmnetUtils
 
 * Glmnet models for multiple alpha 
@@ -280,6 +304,12 @@ source: (https://glmnet.stanford.edu/articles/glmnet.html)
 alphv <- seq(0, 1, len = 11)^3
 cva_pfit <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv, foldid = foldid)
 minlossplot(cva_pfit)
+```
+
+```{r cva-pfit-myglance}
+myglance(cva_pfit)
+mytidy(cva_pfit)$alpha_info
+
 ```
 
 Extract optimal (hyper)parameters from `cva.glmnet` object
@@ -407,13 +437,6 @@ plot_timedep_ROC(survROC_lp)
 ```
 
 
-* Save `cva_pfit` object for post-processing
-
-```{r save-cva_pfit2_M2}
-
-save(cva_pfit, file = "./save/3M2_Cox-save1.Rdata")
-```
-
 # Tidymodels
 
 Fit optimal models using tidymodels
@@ -469,7 +492,7 @@ Create tibble with predicted values for M2:
 tst_rows <- 1:nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na2.
 dataM_test <- data_drop_na[tst_rows, ]
 
-pred_M <- pred_coxnet(mod_opt, dataM_test, time_points = c(5,10))
+pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
 pred_M
 
 pred_M %>% unnest(.pred)
@@ -488,9 +511,10 @@ plot_timedep_ROC(survROC_data)
 
 
 
-* save tidy objects
+* save selected objects for post-processing
 
-```{r save-tidy}
-save(mod_all, mod_opt, alphv, file ="./save/3M2_Cox-save2.Rdata")
+```{r save-objects}
+fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
+save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
 ```
 

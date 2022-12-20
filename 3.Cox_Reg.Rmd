@@ -61,12 +61,12 @@ We will refer to Model M1 as "unadjusted" and to Model M2 as "adjusted" model.
 ## Auxiliary functions
 
 ```{r  pred-coxnet}
-#' Predicted values for _coxnet model
+#' Predicted values for censored:::_coxnet model
 #'
-#' Invokes `predict._coxnet()` to calculate different types of predicted values for _coxnet model
+#' Invokes `censored:::predict._coxnet()` to calculate different types of predicted values for _coxnet model
 #'
 #' @export
-pred_coxnet <- function(model_fit, new_data, 
+pred_censored_coxnet <- function(model_fit, new_data, 
                        time_var = time, status_var = status,
                        time_points = NULL){
   lin_pred <- predict(model_fit, new_data, type = "linear_pred", increasing = FALSE)
