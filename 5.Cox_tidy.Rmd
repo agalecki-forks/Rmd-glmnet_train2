@@ -103,11 +103,9 @@ clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 ```
 
 
-* Data preparation
+* Data preparation: `vars` vector contains variable names specific to the model `r mod_lbl` considered in this document
 
-* `vars` vector contains variable names specific to the model `r mod_lbl` considered in this document
-
-```{r select-vars}
+```{r select-vars, include =FALSE}
 
 if (mod_lbl == "M0") vars <- c(surv_vars, clin_vars) 
 if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars) 
@@ -116,6 +114,7 @@ if (mod_lbl == "M2") vars <- c(surv_vars,  prot_npx, clin_vars)
 ```
 
 ```{r data-prep}
+vars
 data <- dt  %>% select(all_of(vars)) 
 dim(data)         
 
@@ -135,44 +134,44 @@ y <- data.matrix(data_drop_na[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
-Create cv-folds (10 is default in `cv.glmnet`
+Create cv-folds (nfolda = 10 is default in `cv.glmnet`)
 
 ```{r foldid}
 set.seed(1234)
-foldid <- sample(1:10, size = nrow(data_drop_na), replace=TRUE)
+nfolds <-10
+foldid <- sample(1:nfolds, size = nrow(data_drop_na), replace=TRUE)
 
 ```
 
-# glmnet  
+# Ridge regression ($\alpha=0$)
 
 
-## glmnet ($\alpha=0$)
+## glmnet fit 
 
-## glmnet fit ($\alpha=0$)
-
-```{r glmnet-pfit, echo=TRUE, message=FALSE, warning=FALSE}
+```{r glmnet-pfit-a0, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cox regression model
-pfit <- glmnet(x, ySurv, family = "cox", alpha=0)
-glance(pfit)
+pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha=0)
+myglance(pfit_a0)
 ```
 
-## Extracting info from glmnet fit ($\alpha=0$)
+## Explore glmnet fit 
+
+Extracting info from glmnet fit ($\alpha=0$)
 
 ### Coefficient plots
 
 * Cox Regression Model Coefficient Plot
 
 ```{r, pfit_plot, echo=TRUE, message=FALSE, warning=FALSE}
-plot(pfit, label = TRUE)
-myglance(pfit)
+plot(pfit_a0, label = TRUE)
+myglance(pfit_a0)
 ```
 
 
-# cv.glmnet
 
-## cv.glmnet ($\alpha=0$)
+## cv.glmnet
 
-### C-V coefficient plot ($\alpha=0$)
+### C-V coefficient plot 
 
 
 * Cross-Validated Cox Regression Model Coefficient Plot
@@ -183,7 +182,7 @@ cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid)
 plot(cvfit_a0, label = TRUE) 
 ```
 
-### Extract info from C-V ($\alpha=0$)
+### Examine C-V 
 
 ```{r myglance-cvfit0}
 cvfit_a0_myglance <- myglance(cvfit_a0)
@@ -217,6 +216,16 @@ log(lmbda_1se_a0)
 coef(cvfit_a0, s = "lambda.1se")
 ```
 
+Beta coefficients saved 
+
+```{r beta-a0-saved}
+b_a0_1se <- coef(cvfit_a0, s = "lambda.1se")
+b_a0_min <- coef(cvfit_a0, s = "lambda.min")
+
+```
+
+
+
 Use mytidy() function to extract additional info on optimal lambdas
 
 ```{r mytidy-cvfit0}
@@ -228,7 +237,21 @@ cvfit_a0_mytidy %>% filter(near(lambda, lmbda_1se_a0))
 
 ```
 
-## cv.glmnet ($\alpha=1$)
+# LASSO ($\alpha=1$)
+
+Least Absolute Shrinkage and Selection operator
+
+
+## glmnet fit 
+
+```{r glmnet-pfit-a1, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the cox regression model
+pfit_a1 <- glmnet(x, ySurv, family = "cox", alpha=1)
+glance(pfit_a1)
+```
+
+
+## cv.glmnet
 
 ### C-V coefficient plot ($\alpha=1$)
 
@@ -243,7 +266,7 @@ plot(cvfit_a1, label = TRUE)
 ```
 
 
-### Extract info from C-V ($\alpha=1$)
+### Extract info from C-V 
 
 ```{r myglance-cvfit1}
 cvfit_a1_myglance <- myglance(cvfit_a1)
@@ -274,8 +297,14 @@ coef(cvfit_a1, s = "lambda.min")
 
 # Express on natural log scale
 log(lmbda_1se_a1)
+```
 
-coef(cvfit_a1, s = "lambda.1se")
+Beta coefficients saved 
+
+```{r beta-a1-saved}
+b_a1_1se <- coef(cvfit_a1, s = "lambda.1se")
+b_a1_min <- coef(cvfit_a1, s = "lambda.min")
+
 ```
 
 Use mytidy() function to extract additional info on optimal lambdas
@@ -290,8 +319,9 @@ cvfit_a1_mytidy %>% filter(near(lambda, lmbda_1se_a1))
 ```
 
 
-# glmnetUtils
+# Mult alpha
 
+* glmnetUtils package
 * Glmnet models for multiple alpha 
 * We use cross-validation to tune hyperparameter $\alpha$.
 * The idea of "explicitly control the fold" is implemented in `glmnetUtils` package
@@ -326,8 +356,45 @@ Cox regression coefficients using the best combination of (hyper)parameters
 
 ```{r get_best_coef}
 
-coef(cva_pfit, s = lmbda_opt, alpha = a_opt)
+b_ax_opt <- coef(cva_pfit, s = lmbda_opt, alpha = a_opt)
 ```
+
+# Summary
+
+* Summary of selected models
+
+```{r create-sel-models-summary, include = FALSE}
+mod_selx <- tribble(
+     ~lbl,     ~alpha, ~lambda,
+     "a0_min",   0,     lmbda_min_a0,
+     "a0_1se",   0,     lmbda_1se_a0,
+     "ax_opt",   a_opt, lmbda_opt,
+     "a1_min",   1,    lmbda_min_a1,
+     "a1_1se",   1,    lmbda_1se_a1,
+
+)
+```
+```{r sel-models-summary}
+mod_selx
+```
+
+
+
+* Unstandardized beta coefficients for selected models
+
+```{r beta-coefficients}
+
+beta_selx <- tibble(
+    nms      = dimnames(b_a0_min)[[1]],
+    a0_min = as.vector(b_a0_min),
+    a0_1se = as.vector(b_a0_1se),
+    ax_opt = as.vector(b_ax_opt),
+    a1_min = as.vector(b_a1_min),
+    a1_1se = as.vector(b_a1_1se)
+)
+beta_selx %>% print(n=30)
+```
+
 ## Plotting survival curves for optimal model
 
 See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
@@ -417,7 +484,7 @@ Cindex(predM_lp, ySurv_test)                  # For optimal lambda
 ```{r surv-roc}
 dataM_test <- data_test
                 
-## Augment `dataM2_test` with linear predictor
+## Augment `dataM_test` with linear predictor
  dataM_test$predM_lp <- predM_lp
 
 # Evaluate every 2.5 years
@@ -466,11 +533,11 @@ tmp <- mod_all[[2]]
 class(tmp)
 ```
 
-* Create `mod_opt` object
+* Create `mod_opt` object using optimal set of hyperparameters obtained in earlier section.
 
 ```{r tidy-Mod-opt}
-a_opt
-lmbda_opt
+print(a_opt)      #  optimal alpha
+print(lmbda_opt)  #  optimal lambda
 
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
@@ -479,10 +546,11 @@ mod_opt <-
 class(mod_opt)
 ```
 
+
 # Tidy assessment
 
 
-Create tibble with predicted values for M2:
+* Create tibble with (various types of) predicted values for `r mod_lbl`:
 
 * Linear predictor (`.pred_linear_pred`)
 * Survival time (`.pred_time`)
@@ -496,12 +564,31 @@ pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
 pred_M
 
 pred_M %>% unnest(.pred)
+```
 
+
+
+{r Cindex-tidy}
 summ_M <- pred_M %>%
                 summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
 summ_M$Cindex
+```
 
+* Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
 
+```{r plot-predM}
+   
+range(pred_M$time)
+range(pred_M$.pred_time)
+
+ggplot(pred_M, aes(x = time, y= .pred_time)) +
+     coord_fixed() +            # ratio parameter defaults to 1
+     xlim(0,17) + ylim(0, 17) +
+     geom_point(aes(color = factor(status))) +
+     geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
+```
+
+{r plot-timedep-ROC-pred_M}
 tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
 survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
 
