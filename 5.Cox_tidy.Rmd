@@ -41,10 +41,42 @@ pacman::p_load(
   survivalROC   #survivalROC
   )
 ```
-```{r utilsag, include = FALSE}
-if (!require('utilsag')) devtools::install_github("agalecki/utilsag") #, ref = "version-0.1.1")
+
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+This script was (successfully) tested using version *`r uag_ver0`* of the `utilsag` package.
+
+Information on current installation of `utilsag` package is as follows: 
+
+```{r utilsag-info, include = FALSE}
+.libPaths()
+uag_path <- system.file(package = "utilsag")
+uag_ver  <- if (uag_path != ""){
+     as.character(packageVersion("utilsag"))} else ""
+```
+
+*Path to `utilsag`: `r uag_path` 
+*`utilsag` version: *`r uag_ver`* 
+
+
+```{r install-tested-utilsag, include=FALSE}
+uag_ref0 <- paste0("version-", uag_ver0)
+
+if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+
+if (uag_ver != uag_ver0){
+   devtools::install_github("agalecki/utilsag", ref = uag_ref0)
+}
 library(utilsag)
 ```
+ 
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as needed.
+
+
 
 # Introduction (`r mod_lbl`)
 
@@ -72,7 +104,7 @@ Notes:
 
 ## Auxiliary functions
 
-Arguments of selected functions in `utilsag` package are shown below:
+For reference, arguments of selected functions in `utilsag` package are shown below:
 
 ```{r  pred-coxnet}
 str(formals("pred_censored_coxnet"))
@@ -91,8 +123,14 @@ dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>%
   mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
 
 dim(dt) # Number of rows and columns in the input data
+```
+Variables used in Cox regression model:
 
-# variables used in Cox regression model
+* Proteins: `prot_npx`
+* Time/status vars: `surv_vars`
+* Clinical variables: `clin_vars`
+
+```{r Variables-used-Cox}
 prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
               "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
@@ -103,7 +141,7 @@ clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 ```
 
 
-* Data preparation: `vars` vector contains variable names specific to the model `r mod_lbl` considered in this document
+* Data preparation: Vector `vars`  contains all variable names needed to specify model `r mod_lbl` considered in this document
 
 ```{r select-vars, include =FALSE}
 
@@ -112,6 +150,9 @@ if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars)
 if (mod_lbl == "M2") vars <- c(surv_vars,  prot_npx, clin_vars) 
 
 ```
+
+* Create dataset `data` that contains subset of all vars needed for the analytical dataset.
+* Keep rows with complete cases in `data_drop_na` dataframe.
 
 ```{r data-prep}
 vars
@@ -125,9 +166,12 @@ data_drop_na <- data %>% drop_na()
 nrow(data_drop_na)
 ```
 
+* Create X matrix and Surv object
+
 ```{r model-mtx}
 # Create X matrix
-x <- data.matrix(subset(data_drop_na, select=-c(time,status)))
+dtx <- subset(data_drop_na, select=-c(time,status))
+x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
 #select follow-up time and status
@@ -135,12 +179,17 @@ y <- data.matrix(data_drop_na[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
-Create cv-folds (nfolda = 10 is default in `cv.glmnet`)
+* Create cv-folds (nfolda = 10 is default in `cv.glmnet`)
+* Table with fold frequencies is provided.
 
 ```{r foldid}
 set.seed(1234)
 nfolds <-10
 foldid <- sample(1:nfolds, size = nrow(data_drop_na), replace=TRUE)
+length(foldid)
+tibble(tx=foldid) %>% group_by(tx) %>% count()
+
+
 
 ```
 
@@ -172,10 +221,13 @@ myglance(pfit_a0)
 
 ## cv.glmnet
 
+Cross validation (C-V) is perfomed using folds defined in `foldid` vector. 
+
 ### C-V coefficient plot 
 
 
 * Cross-Validated Cox Regression Model Coefficient Plot
+* Note: Postfix *a0* in object names indicates that $\alpha=0$
 
 ```{r, cv_plot-a0, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cross-validatedmodel
@@ -185,24 +237,37 @@ plot(cvfit_a0, label = TRUE)
 
 ### Examine C-V 
 
+Glance object `cvfit_a0`.
+
 ```{r myglance-cvfit0}
 cvfit_a0_myglance <- myglance(cvfit_a0)
 colnames(cvfit_a0_myglance)
-cvfit_a0_myglance
+cvfit_a0_myglance[c("alpha", "lambda.min", "lambda.1se", "index_min" , "index_1se","n_lambda")]
+cvfit_a0_myglance[c("alpha","nobs","n_colx", "family")]
+cvfit_a0_myglance[["lambda.min"]]
+(index_min <- cvfit_a0_myglance[["index_min"]])
 ```
 
 * Coefficients for selected $\lambda$s
 
 Cross-Validated Cox Regressionn Coefficients using `lambda.min` value
 
-```{r, cv-min-a0, echo=TRUE, message=FALSE, warning=FALSE}
+* Cross check `lmbda_min_a0` with `cvfit_a0_myglance[["lambda.min"]]`
+
+```{r  cv-min-a0, echo=TRUE, message=FALSE, warning=FALSE}
 #get the minimal lambda value (value of lambda that gives minimum cvm)
 (lmbda_min_a0 <- cvfit_a0$lambda.min)
 
-# Express on natural log scale
+# Express lambda on natural log scale
 log(lmbda_min_a0)
+```
+
+Two ways of extracting coefficients for min lambda from object of `cv.glmnet` class
+
+```{r cv-min-a0-coefs}
 # Cross-validated Cox Regression Model using the minimal lambda
 coef(cvfit_a0, s = "lambda.min")
+# coef(cvfit_a0, s = index_min) # Use position 
 ```
 
 * Cross-Validated Cox Regression Coefficients using `lambda.1se`
@@ -222,12 +287,11 @@ Beta coefficients saved
 ```{r beta-a0-saved}
 b_a0_1se <- coef(cvfit_a0, s = "lambda.1se")
 b_a0_min <- coef(cvfit_a0, s = "lambda.min")
-
 ```
 
 
 
-Use mytidy() function to extract additional info on optimal lambdas
+Use `mytidy()` function to extract estimates of loss function for selected values of lambda
 
 ```{r mytidy-cvfit0}
 (cvfit_a0_mytidy <- mytidy(cvfit_a0))
@@ -237,7 +301,19 @@ cvfit_a0_mytidy %>% filter(step == cvfit_a0_myglance[["index_1se"]])
 cvfit_a0_mytidy %>% filter(near(lambda, lmbda_1se_a0))
 
 ```
+Plot loss function
 
+```{r loss-function-plot}
+theme_set(theme_minimal())
+
+ggplot(cvfit_a0_mytidy, aes(x = log(lambda))) +
+  geom_line(aes(y = estimate)) +
+  geom_line(aes(y = conf.low),  color = "red", linetype="twodash") +
+  geom_line(aes(y = conf.high), color = "red", linetype="twodash") +
+  geom_vline(xintercept = log(lmbda_min_a0), color ="blue") +
+  geom_vline(xintercept = log(lmbda_1se_a0), color ="blue", linetype="twodash")
+ 
+```
 # LASSO ($\alpha=1$)
 
 Least Absolute Shrinkage and Selection operator
@@ -323,7 +399,7 @@ cvfit_a1_mytidy %>% filter(near(lambda, lmbda_1se_a1))
 ```
 
 
-# Mult alpha
+# Multiple alpha
 
 * glmnetUtils package
 * Glmnet models for multiple alpha 
@@ -565,7 +641,8 @@ class(mod_opt)
 # Tidy assessment
 
 
-* Create tibble with (various types of) predicted values for `r mod_lbl`:
+Create tibble with predicted values for `r mod_lbl`:
+Predicted values are calculated for:
 
 * Linear predictor (`.pred_linear_pred`)
 * Survival time (`.pred_time`)
@@ -625,6 +702,14 @@ save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
 
 fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 save(mod_selected, cva_pfit, mod_all, file = fpath2)
-
 ```
 
+* Reinstall original version of `r "utilsag"` package
+
+```{r reinstall-original-utilsag, include=FALSE}
+
+if (uag_ver != uag_ver0){ # reinstall original utilsag version
+    if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+    devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
+}
+```
