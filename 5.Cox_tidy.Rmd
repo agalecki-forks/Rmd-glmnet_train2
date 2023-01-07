@@ -57,8 +57,8 @@ uag_ver  <- if (uag_path != ""){
      as.character(packageVersion("utilsag"))} else ""
 ```
 
-*Path to `utilsag`: `r uag_path` 
-*`utilsag` version: *`r uag_ver`* 
+* Path to `utilsag`: `r uag_path` 
+* `utilsag` version: *`r uag_ver`* 
 
 
 ```{r install-tested-utilsag, include=FALSE}
@@ -124,11 +124,11 @@ dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>%
 
 dim(dt) # Number of rows and columns in the input data
 ```
-Variables used in Cox regression model:
+Variable names used in Cox regression model are strored in the following vectors:
 
-* Proteins: `prot_npx`
-* Time/status vars: `surv_vars`
-* Clinical variables: `clin_vars`
+* Proteins in `prot_npx`,
+* Time/status in `surv_vars`,
+* Clinical variables in `clin_vars`
 
 ```{r Variables-used-Cox}
 prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
@@ -141,7 +141,10 @@ clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 ```
 
 
-* Data preparation: Vector `vars`  contains all variable names needed to specify model `r mod_lbl` considered in this document
+
+Data preparation: 
+
+* Vector `vars`  contains all variable names needed to specify model `r mod_lbl` considered in this document
 
 ```{r select-vars, include =FALSE}
 
@@ -151,14 +154,21 @@ if (mod_lbl == "M2") vars <- c(surv_vars,  prot_npx, clin_vars)
 
 ```
 
-* Create dataset `data` that contains subset of all vars needed for the analytical dataset.
-* Keep rows with complete cases in `data_drop_na` dataframe.
-
-```{r data-prep}
+```{vars vector}
 vars
+```
+
+* Create dataset `data` that contains subset of all vars needed for the analytical dataset.
+
+```{r data-prep1}
 data <- dt  %>% select(all_of(vars)) 
 dim(data)         
+```
 
+* Keep rows with complete cases in `data_drop_na` dataframe.
+
+
+```{r data-prep2}
 #drop any records with NA
 data_drop_na <- data %>% drop_na()    
 
@@ -180,14 +190,18 @@ ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
 * Create cv-folds (nfolda = 10 is default in `cv.glmnet`)
-* Table with fold frequencies is provided.
 
-```{r foldid}
+```{r foldid-1}
 set.seed(1234)
 nfolds <-10
 foldid <- sample(1:nfolds, size = nrow(data_drop_na), replace=TRUE)
 length(foldid)
-tibble(tx=foldid) %>% group_by(tx) %>% count()
+```
+
+* Table with fold sizes is provided.
+
+```{r foldid-2}
+tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 
 
 
@@ -195,14 +209,19 @@ tibble(tx=foldid) %>% group_by(tx) %>% count()
 
 # Ridge regression ($\alpha=0$)
 
+Ridge regression using `glmnet`.
 
 ## glmnet fit 
+
+Fit the Cox regression model
 
 ```{r glmnet-pfit-a0, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cox regression model
 pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha=0)
 myglance(pfit_a0)
 ```
+
+
 
 ## Explore glmnet fit 
 
@@ -214,7 +233,6 @@ Extracting info from glmnet fit ($\alpha=0$)
 
 ```{r, pfit_plot, echo=TRUE, message=FALSE, warning=FALSE}
 plot(pfit_a0, label = TRUE)
-myglance(pfit_a0)
 ```
 
 
@@ -223,19 +241,24 @@ myglance(pfit_a0)
 
 Cross validation (C-V) is perfomed using folds defined in `foldid` vector. 
 
+```{r, cv_glmnet-a0, echo=TRUE, message=FALSE, warning=FALSE}
+# cross-validate model
+cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid)
+```
+
 ### C-V coefficient plot 
 
 
 * Cross-Validated Cox Regression Model Coefficient Plot
-* Note: Postfix *a0* in object names indicates that $\alpha=0$
+* Note: *a0* used in object names indicates that $\alpha=0$
 
 ```{r, cv_plot-a0, echo=TRUE, message=FALSE, warning=FALSE}
-#fit the cross-validatedmodel
-cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid)
 plot(cvfit_a0, label = TRUE) 
 ```
 
 ### Examine C-V 
+
+#### Glance 
 
 Glance object `cvfit_a0`.
 
@@ -248,7 +271,9 @@ cvfit_a0_myglance[["lambda.min"]]
 (index_min <- cvfit_a0_myglance[["index_min"]])
 ```
 
-* Coefficients for selected $\lambda$s
+#### Coefficients
+
+Coefficients for selected $\lambda$s
 
 Cross-Validated Cox Regressionn Coefficients using `lambda.min` value
 
@@ -301,19 +326,23 @@ cvfit_a0_mytidy %>% filter(step == cvfit_a0_myglance[["index_1se"]])
 cvfit_a0_mytidy %>% filter(near(lambda, lmbda_1se_a0))
 
 ```
-Plot loss function
 
-```{r loss-function-plot}
+Plot cross-validation curve and upper and lower standard deviation curves along
+the $\lambda$ sequence (error bars). Two selected $\lambda$s are indicated by the
+vertical dotted lines
+
+```{r cv-curve-plot-a0}
 theme_set(theme_minimal())
 
-ggplot(cvfit_a0_mytidy, aes(x = log(lambda))) +
-  geom_line(aes(y = estimate)) +
-  geom_line(aes(y = conf.low),  color = "red", linetype="twodash") +
-  geom_line(aes(y = conf.high), color = "red", linetype="twodash") +
-  geom_vline(xintercept = log(lmbda_min_a0), color ="blue") +
-  geom_vline(xintercept = log(lmbda_1se_a0), color ="blue", linetype="twodash")
- 
+ggplot(cvfit_a0_mytidy, aes(x = log(lambda), y = estimate)) +
+  geom_line() +
+  geom_point(size=3, shape=21, fill="red") +   # 21 is filled circle  
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1, color="grey") +
+  geom_vline(xintercept = log(lmbda_min_a0), color ="blue", linetype="dotted") +
+  geom_vline(xintercept = log(lmbda_1se_a0), color ="blue", linetype="dotted") +
+  xlab("Log(Lambda)") + ggtitle("C-V curve (alpha=0)")
 ```
+
 # LASSO ($\alpha=1$)
 
 Least Absolute Shrinkage and Selection operator
@@ -395,9 +424,23 @@ Use mytidy() function to extract additional info on optimal lambdas
 cvfit_a1_mytidy %>% filter(near(lambda, lmbda_min_a1))
 # cvfit_a1_mytidy %>% filter(step == cvfit_a1_myglance[["index_1se"]])
 cvfit_a1_mytidy %>% filter(near(lambda, lmbda_1se_a1))
-
 ```
 
+Plot cross-validation curve and upper and lower standard deviation curves along
+the $\lambda$ sequence (error bars). Two selected $\lambda$s are indicated by the
+vertical dotted lines
+
+```{r cv-curve-plot-a1}
+theme_set(theme_minimal())
+
+ggplot(cvfit_a1_mytidy, aes(x = log(lambda), y = estimate)) +
+  geom_line() +
+  geom_point(size=3, shape=21, fill="red") +   # 21 is filled circle  
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1, color="grey") +
+  geom_vline(xintercept = log(lmbda_min_a1), color ="blue", linetype="dotted") +
+  geom_vline(xintercept = log(lmbda_1se_a1), color ="blue", linetype="dotted") +
+  xlab("Log(Lambda)") + ggtitle("C-V curve (alpha=1)")
+```
 
 # Multiple alpha
 
@@ -420,10 +463,12 @@ minlossplot(cva_pfit)
 
 
 ## Explore cva.glmnet
+cva_pfit_mytidy$glmnet.cv %>% filter(near(lambda, lmbda_min_a1))
+
+Glance `cva_pfit` object. 
+
 ```{r cva-pfit-myglance}
 myglance(cva_pfit)
-mytidy(cva_pfit)$alpha_info
-
 ```
 
 Extract optimal (hyper)parameters from `cva.glmnet` object
