@@ -296,10 +296,8 @@ cvfit_a0_glance[c("alpha","nobs","n_colx", "family")]
 Optimal values of lambda `lambda.min` and `lambda.1se` extracted (two ways)
 
 ```{r lambdas-extracted}
-lmbda_a0.min   <- cvfit_a0_glance[["lambda.min"]]
-lmbda_a0.min
-lmbda_a0.1se  <- cvfit_a0_glance[["lambda.1se"]]
-lmbda_a0.1se
+(lmbda_a0.min   <- cvfit_a0_glance[["lambda.min"]])
+(lmbda_a0.1se  <- cvfit_a0_glance[["lambda.1se"]])
 cvfit_a0$lambda.min  # Alternative way 
 cvfit_a0$lambda.1se
 # Express lambda on natural log scale
@@ -315,7 +313,7 @@ log(lmbda_a0.min)
 ### C-V curves plot 
 
 
-We will use `ggplot()` function to create cross-validation curve and upper and lower standard deviation curves along
+We will use `ggplot()` function to display cross-validation curve and upper and lower standard deviation curves along
 the $\lambda$ sequence . Two selected $\lambda$s are indicated by the vertical dotted lines.
 Similar plot can be obtained using `plot()` function
 
@@ -323,7 +321,7 @@ Similar plot can be obtained using `plot()` function
 ggplot(cvfit_a0_tidy, aes(x = log(lambda), y = estimate)) +
   geom_line() +
   geom_point(size=3, shape=21, fill="red") +   # 21 is filled circle  
-  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1, color="grey") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1, color="grey") +
   geom_vline(xintercept = log(lmbda_a0.min), color ="blue", linetype="dotted") +
   geom_vline(xintercept = log(lmbda_a0.1se), color ="blue", linetype="dotted") +
   xlab("Log(Lambda)") + ylab("Partial likelihood deviance") +ggtitle("C-V curve (alpha=0)")
@@ -372,21 +370,23 @@ cva_pfit <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv, foldid = foldi
 
 ### Myglance
 
-```{cva-myglance}
-cva_pfit_glance <- myglance(cva_pfit)
+```{r cva-myglance}
+(cva_pfit_glance <- myglance(cva_pfit))
 ```
 
 ### Mytidy
 
-```{cva-mytidy-create}
+`mytidy()` function used for `cva` object generates list with 3 components.
+
+```{r cva-mytidy-create}
 cva_pfit_tidy <- mytidy(cva_pfit)
-mode(cva_pfit_tidy)
+mode(cva_pfit_tidy)  # List
 names(cva_pfit_tidy)
 ```
 
 Show `mytidy` components
 
-```{cva-mytidy-show}
+```{r cva-mytidy-show}
 (cva_alpha <- cva_pfit_tidy$alpha_info) # One row per alpha hyperparameter
 (cva_loss <- cva_pfit_tidy$glmnet.cv)   # Tibble grouped by a_idx
 (cva_beta <- cva_pfit_tidy$glmnet_beta) 
@@ -406,12 +406,13 @@ a_idxopt  # optimal alpha
 
 ... with corresponding lambda values:
 
-```{r select-parms}
+```{r select3-wide}
 (sel3wide <- cva_alpha %>%  select(a_idx, alpha, lambda.min, lambda.1se) %>%
      filter(a_idx %in% c(1,a_idxopt,11))
      )
-     
-     
+```
+ 
+```{r select3-long}   
 (sel3long <- sel3wide %>% gather(lmbda_lbl, lmbda, -c(a_idx, alpha)) %>%
    mutate(lbl = paste0("a_", a_idx,"_", substr(lmbda_lbl,8,10)))
                
@@ -421,66 +422,33 @@ a_idxopt  # optimal alpha
 
 # Summary
 
+
+## Regression coefficients
+
 * Coefficients of selected models
 
-
-lj <-left_join(sel3wide, cva_loss, by = "a_idx") %>%
-        select(a_idx, alpha, lambda.min, lambda.1se,  step, lambda)
-lj_min <- lj %>% filter(near(lambda, lambda.min)) %>% 
-     mutate(lbl = paste0("a_", a_idx,"_min"))
-lj_1se <- lj %>% filter(near(lambda, lambda.1se)) 
-     %>% mutate(lbl = paste0("a_", a_idx,"_1se"))
+```{r betas-overview}
+lj <- left_join(sel3wide, cva_loss, by = "a_idx") %>% # keys: a_idx, step
+        select(a_idx, alpha, lambda.min, lambda.1se, step, lambda)
+lj_min <- lj %>% filter(near(lambda, lambda.min)) %>% # selected rows with lambda.min
+     mutate(lbl = paste0("a_", a_idx,"_min"))  
+lj_1se <- lj %>% filter(near(lambda, lambda.1se)) %>% # selected rows with lambda.1se
+     mutate(lbl = paste0("a_", a_idx,"_1se"))
 betas <-rbind(lj_min, lj_1se) %>% select(-c(lambda.min, lambda.1se)) %>%
-   arrange(a_idx, desc(step)) %>%
-   left_join(cva_beta, by =c("a_idx","step")) %>% 
+   arrange(a_idx, desc(step)) %>%                  # sort
+   left_join(cva_beta, by =c("a_idx", "step")) %>% 
    select(c(term, lbl, estimate)) %>%
-   pivot_wider(names_from = lbl, values_from = estimate)
-   
-   
+   pivot_wider(names_from = lbl, values_from = estimate) # transpose 
 betas %>%  print(n = 26)
-   
+```   
     
- lj1
- left_join(lj1, cva_beta, by = c("a_idx", "step")) %>% 
-   select(-dev.ratio)  %>% print( n=200)
   
-
-```{r create-sel-models-summary, include = FALSE}
-mod_selected <- tribble(
-     ~lbl,     ~alpha, ~lambda,
-     "a0_min",   0,     lmbda_min_a0,
-     "a0_1se",   0,     lmbda_1se_a0,
-     "ax_opt",   a_opt, lmbda_opt #,
-     #"a1_min",   1,    lmbda_min_a1,
-     #"a1_1se",   1,    lmbda_1se_a1,
-
-)
-```
-
-```{r sel-models-summary}
-mod_selected
+```{r optm}
+a_opt <- 0.064
+lmbda_opt <- 0.123
 ```
 
 
-
-* Unstandardized beta coefficients for selected models
-
-```{r beta-coefficients-selx, include = FALSE}
-
-beta_selx <- tibble(
-    nms      = dimnames(b_a0_min)[[1]],
-    a0_min = as.vector(b_a0_min),
-    a0_1se = as.vector(b_a0_1se),
-    ax_opt = as.vector(b_ax_opt) #,
-#   a1_min = as.vector(b_a1_min),
-#    a1_1se = as.vector(b_a1_1se)
-)
-
-```
-
-```{r print-beta-coefficients-selx}
-beta_selx %>% print(n=30)
-```
 ## Plotting survival curves for optimal model
 
 See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
@@ -696,10 +664,10 @@ plot_timedep_ROC(survROC_data)
 
 ```{r save-objects}
 fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
-save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
+#save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
 
 fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
-save(mod_selected, cva_pfit, mod_all, file = fpath2)
+# save(mod_selected, cva_pfit, mod_all, file = fpath2)
 ```
 
 * Reinstall original version of `r "utilsag"` package
