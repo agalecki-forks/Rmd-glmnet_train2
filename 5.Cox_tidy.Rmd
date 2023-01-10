@@ -199,7 +199,7 @@ foldid <- sample(1:nfolds, size = nrow(data_drop_na), replace=TRUE)
 length(foldid)
 ```
 
-* Table with fold sizes is provided.
+* Table with fold sizes is included below.
 
 ```{r foldid-2}
 tibble(foldid = foldid) %>% group_by(foldid) %>% count()
@@ -211,12 +211,12 @@ Fit ridge Cox regression using `glmnet`.
 
 ```{r glmnet-pfit-a0, echo=TRUE, message=FALSE, warning=FALSE}
 #fit the cox regression model
-pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha=0)
+pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha = 0)
 ```
 
 ## Explore glmnet fit 
 
-Explore glmnet fit using tidy approach.
+Explore `glmnet` fit using tidy approach.
 
 ### Myglance
 
@@ -244,7 +244,7 @@ dfx <- dfg %>%  summarize(L1_norm = sum(abs(estimate))) %>%
  right_join(dfg, by ="step")
 ```
 
-Plot path of (standardized) coefficients (y-axis) versus $\ell_1$-norm.
+Plot path of (standardized) coefficients (y-axis) versus $\ell_1$-norm (x-axis).
 Each curve corresponds to a covariate. Similar plot can be obtained using `plot()` function.
 
 
@@ -267,7 +267,6 @@ ggplot(dfg , aes(x = log(lambda), y = estimate)) +
 
 ```
 
-
 # C-V of glmnet model
 
 cv.glmnet ($\alpha$ =0)
@@ -276,7 +275,7 @@ Cross validation (C-V) is perfomed using folds defined in `foldid` vector.
 
 ```{r, cv_glmnet-a0, echo=TRUE, message=FALSE, warning=FALSE}
 # cross-validate model
-cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid)
+(cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid))
 ```
 
 ## Exploring C-V object
@@ -313,8 +312,8 @@ log(lmbda_a0.min)
 ### C-V curves plot 
 
 
-We will use `ggplot()` function to display cross-validation curve and upper and lower standard deviation curves along
-the $\lambda$ sequence . Two selected $\lambda$s are indicated by the vertical dotted lines.
+We will use `ggplot()` function to display cross-validation curve with upper and lower standard deviation along
+the $\lambda$ sequence. Two selected $\lambda$s are indicated by the vertical dotted lines.
 Similar plot can be obtained using `plot()` function
 
 ```{r cv-curve-plot-a0}
@@ -338,10 +337,46 @@ a0_min <- pfit_a0_tidy %>%
          select (lambda,df, beta)%>% filter(near(lambda, lmbda_a0.min)) %>% mutate(lbl="a0_min")
 a0_1se <- pfit_a0_tidy %>%
          select (lambda,df, beta)%>% filter(near(lambda, lmbda_a0.1se)) %>% mutate(lbl="a0_1se")
-rbind(a0_min,a0_1se)  %>% unnest(beta)
+rbind(a0_min,a0_1se)  %>% unnest(beta) %>% select(term, lbl, estimate) %>%
+  pivot_wider(names_from = lbl, values_from = estimate) # transpose
 #  coef(cvfit_a0, s = "lambda.min")
 #  coef(cvfit_a0, s = "lambda.1se")
 ```
+### Survival curve
+
+Plotting survival curve for fitted model
+
+See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
+
+Notes: 
+
+* `survfit()` function computes survivor function for a Cox PH model with elastic net penalty.
+* the design matrix x and response ySurv used to fit the model need to be passed to `survfit` function
+
+* Step 1: Fit the glmnet model to original data (stored in x2 and y2Surv objects) using optimal alpha.
+* Note: Resulting object `pfit_a0` contains models for multiple lambdas. 
+
+```{r pfit2_a-object}
+alphx    <-  0
+lmbda_opt <- lmbda_a0.1se
+# pfit_a0  <- glmnet(x, ySurv, family = "cox", alpha = alphx)
+```
+
+```{r surv2-plot}
+# survfit object for penalized Cox model
+sfx <- survival::survfit(pfit_a0, s = lmbda_opt, x = x, y = ySurv)
+plot(sfx)
+```
+
+Note that the same plot can be obtained using the code below.
+
+```{r surv-plot-mean}
+xmean <- apply(x, 2, mean)
+sfm <- survival::survfit(pfit_a0, s = lmbda_opt, x = x, y = ySurv, newx = xmean)
+# plot(sfm)
+```
+
+
 
 
 # Multiple alpha
@@ -361,7 +396,7 @@ Use `cva.glmnet()` function
 ```{r glmnetUtils}
 
 alphv <- seq(0, 1, len = 11)^3
-cva_pfit <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv, foldid = foldid)
+cva_pfit <- cva.glmnet(x = x, y = ySurv, family = "cox", alpha = alphv, foldid = foldid)
 # minlossplot(cva_pfit)
 ```
 
@@ -381,7 +416,7 @@ cva_pfit <- cva.glmnet(x=x,y=ySurv,family = "cox", alpha = alphv, foldid = foldi
 ```{r cva-mytidy-create}
 cva_pfit_tidy <- mytidy(cva_pfit)
 mode(cva_pfit_tidy)  # List
-names(cva_pfit_tidy)
+names(cva_pfit_tidy) # Component names
 ```
 
 Show `mytidy` components
@@ -392,6 +427,10 @@ Show `mytidy` components
 (cva_beta <- cva_pfit_tidy$glmnet_beta) 
 ```
 
+# C-V results
+
+## Optimal hyperparameters
+
 We select subset of $\alpha$ (and corresponding optimal $\lambda$ values)  for further
 consideration.
 
@@ -400,11 +439,21 @@ Identify optimal alpha (global minimum for loss function)
 ```{r identify-alpha-opt}
 alpha_opt_tbl <- ungroup(cva_loss) %>% filter (estimate == min(estimate))
 a_idxopt <- alpha_opt_tbl[["a_idx"]]
-a_idxopt  # optimal alpha
+a_idxopt  # index for optimal alpha
+```
+ 
+   
+```{r optm}
+(optm <- cva_alpha[a_idxopt,])
+(a_opt      <- optm[['alpha']])
+(lmbda_min  <- optm[['lambda.min']])
+(lmbda_1se  <- optm[['lambda.1se']])
+lmbda_opt   <- lmbda_1se    # choose value 
 ```
 
+## Auxiliary tables
 
-... with corresponding lambda values:
+Auxiliary tables with selected alpha values:
 
 ```{r select3-wide}
 (sel3wide <- cva_alpha %>%  select(a_idx, alpha, lambda.min, lambda.1se) %>%
@@ -419,8 +468,6 @@ a_idxopt  # optimal alpha
 )
 ```
 
-
-# Summary
 
 
 ## Regression coefficients
@@ -441,44 +488,19 @@ betas <-rbind(lj_min, lj_1se) %>% select(-c(lambda.min, lambda.1se)) %>%
    pivot_wider(names_from = lbl, values_from = estimate) # transpose 
 betas %>%  print(n = 26)
 ```   
-    
-  
-```{r optm}
-a_opt <- 0.064
-lmbda_opt <- 0.123
+
+## Models for optimal $\alpha$
+
+More precisely, we extract sequence of models corresponding to diffrent values of $\lamba$
+for _optimal_ value of $\alpha$
+
+```{r cva-modlist}
+cva_modlist <- cva_pfit$modlist
+cv_opt_model <- cva_modlist[[a_idxopt]]
+class(cv_opt_model)
+pfit_aopt  <- cv_opt_model$glmnet.fit
+class(pfit_aopt)
 ```
-
-
-## Plotting survival curves for optimal model
-
-See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
-
-Notes: 
-
-* `survfit` computes the predicted survivor function for a Cox PH model with elastic net penalty.
-* the design matrix x and response ySurv used to fit the model need to be passed to `survfit` function
-
-* Step 1: Fit the glmnet model to original data (stored in x2 and y2Surv objects) using optimal alpha.
-* Note: Resulting object `pfit_aopt` contains models for multiple lambdas. 
-
-```{r pfit2_a-object}
-pfit_aopt <- glmnet(x, ySurv, family = "cox", alpha= a_opt)
-```
-
-```{r surv2-plot}
-# survfit object for penalized Cox model
-sfx <- survival::survfit(pfit_aopt, s = lmbda_opt, x = x, y = ySurv)
-plot(sfx)
-```
-
-Note that the same plot can be obtained using the code below.
-
-```{r surv-plot-mean}
-xmean <- apply(x, 2, mean)
-sfm <- survival::survfit(pfit_aopt, s = lmbda_opt, x = x, y = ySurv, newx = xmean)
-# plot(sfm)
-```
-
 
 # Model Performance
 
