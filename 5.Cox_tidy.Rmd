@@ -424,9 +424,22 @@ a_idxopt  # optimal alpha
 * Coefficients of selected models
 
 
-lj1 <-left_join(sel3wide, cva_loss, by = "a_idx") %>%
- filter(near(lambda, lambda.min) | near(lambda,lambda.1se)) %>%
-    select(a_idx, alpha, lambda.min, lambda.1se,  step, lambda)
+lj <-left_join(sel3wide, cva_loss, by = "a_idx") %>%
+        select(a_idx, alpha, lambda.min, lambda.1se,  step, lambda)
+lj_min <- lj %>% filter(near(lambda, lambda.min)) %>% 
+     mutate(lbl = paste0("a_", a_idx,"_min"))
+lj_1se <- lj %>% filter(near(lambda, lambda.1se)) 
+     %>% mutate(lbl = paste0("a_", a_idx,"_1se"))
+betas <-rbind(lj_min, lj_1se) %>% select(-c(lambda.min, lambda.1se)) %>%
+   arrange(a_idx, desc(step)) %>%
+   left_join(cva_beta, by =c("a_idx","step")) %>% 
+   select(c(term, lbl, estimate)) %>%
+   pivot_wider(names_from = lbl, values_from = estimate)
+   
+   
+betas %>%  print(n = 26)
+   
+    
  lj1
  left_join(lj1, cva_beta, by = c("a_idx", "step")) %>% 
    select(-dev.ratio)  %>% print( n=200)
