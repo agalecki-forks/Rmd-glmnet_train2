@@ -255,6 +255,11 @@ theme_set(theme_minimal())
 ggplot(dfx, aes(x = L1_norm, y = estimate)) +
        geom_line(aes(color = term)) +
        xlab("L1 norm") + ylab("Coefficients") 
+```
+
+Similar plot (not shown) can be obtained using `plot()` function.
+
+```{r L-1norm-a0-plot2}
 # plot(pfit_a0, label = TRUE) # L1 norm on x-axis
 ```
 
@@ -265,6 +270,14 @@ Each curve corresponds to a covariate. Similar plot can be obtained using `plot(
 
 ggplot(dfg , aes(x = log(lambda), y = estimate)) +
        geom_line(aes(color = term)) + ylab("Coefficients")
+```
+
+Similar plot (not shown) can be obtained using `plot()` function.
+
+
+```{r coef-plot2}
+
+
 # plot(pfit_a0, xvar='lambda', label=TRUE)  # lambda on x-axis     
 
 ```
@@ -290,16 +303,23 @@ Glance object `cvfit_a0` using `myglance()` function.
 ```{r myglance-cvfit0}
 cvfit_a0_glance <- myglance(cvfit_a0)
 colnames(cvfit_a0_glance)
-cvfit_a0_glance[c("alpha", "lambda.min", "lambda.1se", "index_min" , "index_1se","n_lambda")]
-cvfit_a0_glance[c("alpha","nobs","n_colx", "family")]
+cvfit_a0_glance[c(1:3, 6:8)]   # items (part 1)
+cvfit_a0_glance[c(1, 4, 5, 9)] # items (part 2)
 # glance(cvfit_a0_glance)
 ```
 
-Optimal values of lambda `lambda.min` and `lambda.1se` extracted (two ways)
+Optimal values of lambda `lambda.min` and `lambda.1se` extracted.
+
+* Using tibble created by `myglance`
 
 ```{r lambdas-extracted}
 (lmbda_a0.min   <- cvfit_a0_glance[["lambda.min"]])
 (lmbda_a0.1se  <- cvfit_a0_glance[["lambda.1se"]])
+```
+
+* Using c-v object.
+
+```{r lambdas-extracted2}
 cvfit_a0$lambda.min  # Alternative way 
 cvfit_a0$lambda.1se
 # Express lambda on natural log scale
@@ -317,7 +337,6 @@ log(lmbda_a0.min)
 
 We will use `ggplot()` function to display cross-validation curve with upper and lower standard deviation along
 the $\lambda$ sequence. Two selected $\lambda$s are indicated by the vertical dotted lines.
-Similar plot can be obtained using `plot()` function
 
 ```{r cv-curve-plot-a0}
 ggplot(cvfit_a0_tidy, aes(x = log(lambda), y = estimate)) +
@@ -327,13 +346,17 @@ ggplot(cvfit_a0_tidy, aes(x = log(lambda), y = estimate)) +
   geom_vline(xintercept = log(lmbda_a0.min), color ="blue", linetype="dotted") +
   geom_vline(xintercept = log(lmbda_a0.1se), color ="blue", linetype="dotted") +
   xlab("Log(Lambda)") + ylab("Partial likelihood deviance") +ggtitle("C-V curve (alpha=0)")
-# plot(cvfit_a0)    # Similar plot  
+```
+
+Similar plot can be obtained using `plot()` function
+
+```{r cv-curve-plot2-a0}
+# plot(cvfit_a0)    # Similar plot (not shown) 
 ```
 
 ### Coefficients
 
-Regression coefficients for selected $\lambda$s using tidy approach. Similar results can be obtained
-using `coef()` function.
+Regression coefficients for selected $\lambda$s using tidy approach. 
 
 ```{r mytidy-coefs-init}
 a0_min <- pfit_a0_tidy %>%
@@ -342,12 +365,18 @@ a0_1se <- pfit_a0_tidy %>%
          select (lambda,df, beta)%>% filter(near(lambda, lmbda_a0.1se)) %>% mutate(lbl="a0_1se")
 rbind(a0_min,a0_1se)  %>% unnest(beta) %>% select(term, lbl, estimate) %>%
   pivot_wider(names_from = lbl, values_from = estimate) # transpose
+```
+
+Similar results (not shown) can be obtained using `coef()` function.
+
+```{r coefs-init}
 #  coef(cvfit_a0, s = "lambda.min")
 #  coef(cvfit_a0, s = "lambda.1se")
 ```
+
 ### Survival curve
 
-Plotting survival curve for fitted model
+Plotting survival curve for a fitted model
 
 See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
 
@@ -356,18 +385,10 @@ Notes:
 * `survfit()` function computes survivor function for a Cox PH model with elastic net penalty.
 * the design matrix x and response ySurv used to fit the model need to be passed to `survfit` function
 
-* Step 1: Fit the glmnet model to original data (stored in x2 and y2Surv objects) using optimal alpha.
-* Note: Resulting object `pfit_a0` contains models for multiple lambdas. 
-
-```{r pfit2_a-object}
-alphx    <-  0
-lmbda_opt <- lmbda_a0.1se
-# pfit_a0  <- glmnet(x, ySurv, family = "cox", alpha = alphx)
-```
-
 ```{r surv2-plot}
 # survfit object for penalized Cox model
-sfx <- survival::survfit(pfit_a0, s = lmbda_opt, x = x, y = ySurv)
+(lmbda0 <- lmbda_a0.1se) # Lambda selected
+sfx <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv)
 plot(sfx)
 ```
 
@@ -375,8 +396,20 @@ Note that the same plot can be obtained using the code below.
 
 ```{r surv-plot-mean}
 xmean <- apply(x, 2, mean)
-sfm <- survival::survfit(pfit_a0, s = lmbda_opt, x = x, y = ySurv, newx = xmean)
+sfm <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv, newx = xmean)
 # plot(sfm)
+```
+
+Survival curves by sex.
+
+```{r surv-plot-mean2}
+x1 <- x2 <- xmean
+x1["SEX"] <-1
+x2["SEX"] <-2
+xx <- t(cbind(x1,x2))
+sfm2 <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv, newx = xx)
+plot(sfm2)
+
 ```
 
 
@@ -471,8 +504,8 @@ Auxiliary tables with selected alpha values:
  
 ```{r select3-long}   
 (sel3long <- sel3wide %>% gather(lmbda_lbl, lmbda, -c(a_idx, alpha)) %>%
-   mutate(lbl = paste0("a_", a_idx,"_", substr(lmbda_lbl,8,10)))
-               
+   mutate(lbl = paste0("a_", a_idx,"_", substr(lmbda_lbl,8,10))) %>%
+   arrange(a_idx)            
 )
 ```
 
@@ -510,6 +543,55 @@ pfit_aopt  <- cv_opt_model$glmnet.fit
 class(pfit_aopt)
 ```
 
+# Intermediate step
+
+Prepare test data. It contains  
+
+```{r Prepare-test-data}
+
+test_rows <- 1:100 # nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na.
+#x_test <- x[test_rows,]
+#y_test <- y[test_rows,]
+#ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
+
+data_test <- data_drop_na[test_rows, ]
+range(data_test$time)
+```
+
+```{r objects needed}
+
+
+data_train <- data_drop_na
+rm(data_drop_na)
+```
+
+```{r save-train-objects, include =FALSE}
+fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
+save(vars, data_train, data_test,  file = fpath1)
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+```
+
+`data_test` contains all variables listed in `vars` vector (without missing values)
+
+```{r aux-objects}
+sel3_no <-3
+(sel <-sel3long[sel3_no,])
+
+rm(a_opt, lmbda_opt)
+a_opt      <- sel[["alpha"]]
+lmbda_opt <- sel[["lmbda"]]
+
+dtx_test <- subset(data_test, select=-c(time,status))
+x_test <- model.matrix(~0 +., data=dtx_test)
+dim(x_test)
+colnames(x_test)
+# Create Surv object
+y_test <- data.matrix(data_test[,c("time", "status")])
+ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
+
+```
+
 
 # Model Performance
 
@@ -524,18 +606,6 @@ is too optimistic.
 It contains model fits for multiple lambdas. 
 
 
-Step 2: Prepare test data 
-
-```{r Prepare-test-data}
-dim(data_drop_na)
-test_rows <- 1:100 # nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na.
-x_test <- x[test_rows,]
-y_test <- y[test_rows,]
-ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
-
-data_test <- data_drop_na[test_rows, ]
-range(data_test$time)
-```
 
 Step 3: Calculate predicted values for test data
 
@@ -614,7 +684,7 @@ Create `mod_all` object.
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = data_drop_na)
+  fit(Surv(time, status) ~ ., data = data_train)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
@@ -630,7 +700,7 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = data_drop_na)
+  fit(Surv(time, status) ~ ., data = data_train)
 class(mod_opt)
 ```
 
@@ -646,9 +716,6 @@ Predicted values are calculated for:
 * Survival probabilities at selected time points (`.pred`)
 
 ```{r  pred-coxnet-mod-opt}
-tst_rows <- 1:nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na2.
-dataM_test <- data_drop_na[tst_rows, ]
-
 pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
 pred_M
 
@@ -669,8 +736,6 @@ summ_M$Cindex
    
 range(pred_M$time)
 range(pred_M$.pred_time)
-pred_Md <- pred_M %>% mutate(diff = .pred_time - time,
-                               mx = (.pred_time + time)/2)
 
 ggplot(pred_M, aes(x = time, y= .pred_time)) +
      coord_fixed() +            # ratio parameter defaults to 1
@@ -688,7 +753,6 @@ survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_data) 
 ```
-
 
 
 * save selected objects for post-processing
