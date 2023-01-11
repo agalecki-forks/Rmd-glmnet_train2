@@ -408,7 +408,7 @@ cva_pfit <- cva.glmnet(x = x, y = ySurv, family = "cox", alpha = alphv, foldid =
 
 ### Myglance
 
-* Note: --  No glance method for objects of class cva.glmnet
+* Note: --  No `glance` method for objects of class cva.glmnet
 
 ```{r cva-myglance}
 (cva_pfit_glance <- myglance(cva_pfit))
