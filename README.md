@@ -1,13 +1,9 @@
-<<<<<<< HEAD
-# Main analysis  
-=======
 # Branches
 
 * `2023-01-init`:  5.Cox_tidy.Rmd before dividing into two (independent) parts pertaining to training and validation 
 
 
 # Notes 
->>>>>>> 4a3e6e6769b02be6e61e0667ae5c0fc9a9554cfa
 
 ## Categorical covariates
  
