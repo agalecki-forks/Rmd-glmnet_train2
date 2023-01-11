@@ -510,6 +510,7 @@ pfit_aopt  <- cv_opt_model$glmnet.fit
 class(pfit_aopt)
 ```
 
+
 # Model Performance
 
 This section should be considered as an illustration only, because the `glmnet` model
@@ -527,7 +528,7 @@ Step 2: Prepare test data
 
 ```{r Prepare-test-data}
 dim(data_drop_na)
-test_rows <- 1:nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na.
+test_rows <- 1:100 # nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na.
 x_test <- x[test_rows,]
 y_test <- y[test_rows,]
 ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
@@ -692,11 +693,11 @@ plot_timedep_ROC(survROC_data)
 
 * save selected objects for post-processing
 
-```{r save-objects}
-fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
+```{r save-objects, include =FALSE}
+#- fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
 #save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
 
-fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, file = fpath2)
 ```
 
