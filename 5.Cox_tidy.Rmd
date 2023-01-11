@@ -218,20 +218,22 @@ pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha = 0)
 
 Explore `glmnet` fit using tidy approach.
 
-### Myglance
+### Glance
 
 Glance `glmnet` model fit. 
 
 ```{r myglance-a0}
-(pfit_a0_glance <- myglance(pfit_a0))
+(pfit_a0_glance <- myglance(pfit_a0)) 
+# glance(pfit_a0) # Less detailed info
 ```
 
-### Mytidy
+### Tidy
 
-Tidy Cox regression output using `mytidy`
+Tidy Cox regression output.
 
 ```{r mytidy-a0}
 (pfit_a0_tidy <- mytidy(pfit_a0))
+# tidy(pfit_a0) %>% nest(beta =c(term,estimate))
 ```
 
 ### Coefficient plots
@@ -281,7 +283,7 @@ Cross validation (C-V) is perfomed using folds defined in `foldid` vector.
 ## Exploring C-V object
 
 
-### Myglance 
+### Glance 
 
 Glance object `cvfit_a0` using `myglance()` function.
 
@@ -290,6 +292,7 @@ cvfit_a0_glance <- myglance(cvfit_a0)
 colnames(cvfit_a0_glance)
 cvfit_a0_glance[c("alpha", "lambda.min", "lambda.1se", "index_min" , "index_1se","n_lambda")]
 cvfit_a0_glance[c("alpha","nobs","n_colx", "family")]
+# glance(cvfit_a0_glance)
 ```
 
 Optimal values of lambda `lambda.min` and `lambda.1se` extracted (two ways)
@@ -303,11 +306,11 @@ cvfit_a0$lambda.1se
 log(lmbda_a0.min)
 ```
 
-### Mytidy
+### Tidy
 
 ```{r mytidy_cvfit0}
 (cvfit_a0_tidy <- mytidy(cvfit_a0))
-
+# tidy(cvfit_a0)
 ```
 ### C-V curves plot 
 
@@ -405,6 +408,8 @@ cva_pfit <- cva.glmnet(x = x, y = ySurv, family = "cox", alpha = alphv, foldid =
 
 ### Myglance
 
+* Note: --  No glance method for objects of class cva.glmnet
+
 ```{r cva-myglance}
 (cva_pfit_glance <- myglance(cva_pfit))
 ```
@@ -413,10 +418,13 @@ cva_pfit <- cva.glmnet(x = x, y = ySurv, family = "cox", alpha = alphv, foldid =
 
 `mytidy()` function used for `cva` object generates list with 3 components.
 
+* Note: No tidy method for objects of class cva.glmnet
+
 ```{r cva-mytidy-create}
 cva_pfit_tidy <- mytidy(cva_pfit)
 mode(cva_pfit_tidy)  # List
 names(cva_pfit_tidy) # Component names
+# 
 ```
 
 Show `mytidy` components
