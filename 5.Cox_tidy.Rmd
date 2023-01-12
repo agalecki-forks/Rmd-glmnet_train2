@@ -166,36 +166,36 @@ data <- dt  %>% select(all_of(vars))
 dim(data)         
 ```
 
-* Keep rows with complete cases in `data_drop_na` dataframe.
+* Keep rows with complete cases in `train_data` dataframe.
 
 
 ```{r data-prep2}
 #drop any records with NA
-data_drop_na <- data %>% drop_na()    
+train_data <- data %>% drop_na()    
 
 #Total sample size
-nrow(data_drop_na)
+nrow(train_data)
 ```
 
 * Create X matrix and Surv object required by `glmnet`.
 
 ```{r model-mtx}
 # Create X matrix
-dtx <- subset(data_drop_na, select=-c(time,status))
+dtx <- subset(train_data, select=-c(time,status))
 x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
 # Create Surv object
-y <- data.matrix(data_drop_na[,c("time", "status")])
+y <- data.matrix(train_data[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
-* Create cv-folds (nfolda = 10 is default in `cv.glmnet`)
+* Create cv-folds (nfolds = 10 is default in `cv.glmnet`)
 
 ```{r foldid-1}
 set.seed(1234)
 nfolds <-10
-foldid <- sample(1:nfolds, size = nrow(data_drop_na), replace=TRUE)
+foldid <- sample(1:nfolds, size = nrow(train_data), replace=TRUE)
 length(foldid)
 ```
 
@@ -216,7 +216,7 @@ pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha = 0)
 
 ## Explore glmnet fit 
 
-Explore `glmnet` fit using tidy approach.
+Explore `glmnet` fit using `myglance()` and `mytidy()` functions.
 
 ### Glance
 
@@ -233,6 +233,11 @@ Tidy Cox regression output.
 
 ```{r mytidy-a0}
 (pfit_a0_tidy <- mytidy(pfit_a0))
+```
+
+Similar output (not shown) can be obtained using `tidy()` function.
+
+```{r tidy-a0}
 # tidy(pfit_a0) %>% nest(beta =c(term,estimate))
 ```
 
@@ -246,9 +251,8 @@ dfx <- dfg %>%  summarize(L1_norm = sum(abs(estimate))) %>%
  right_join(dfg, by ="step")
 ```
 
-Plot path of (standardized) coefficients (y-axis) versus $\ell_1$-norm (x-axis).
-Each curve corresponds to a covariate. Similar plot can be obtained using `plot()` function.
-
+Path of (standardized) coefficients (y-axis) is plotted versus $\ell_1$-norm (x-axis).
+Each curve corresponds to a covariate. 
 
 ```{r mytidy-a0-plot}
 theme_set(theme_minimal())
@@ -261,10 +265,11 @@ Similar plot (not shown) can be obtained using `plot()` function.
 
 ```{r L-1norm-a0-plot2}
 # plot(pfit_a0, label = TRUE) # L1 norm on x-axis
+coefplot(pfit_a0)
 ```
 
-Plot path of (standardized) coefficients (y-axis)  versus  $\lambda$.
-Each curve corresponds to a covariate. Similar plot can be obtained using `plot()` function.
+Plot path of (standardized) coefficients (y-axis)  versus  $\lambda$ (x-axis).
+Each curve corresponds to a covariate. 
 
 ```{r mytidy-coef-plot}
 
@@ -305,28 +310,35 @@ cvfit_a0_glance <- myglance(cvfit_a0)
 colnames(cvfit_a0_glance)
 cvfit_a0_glance[c(1:3, 6:8)]   # items (part 1)
 cvfit_a0_glance[c(1, 4, 5, 9)] # items (part 2)
-# glance(cvfit_a0_glance)
+```
+
+Similar output using `glance()` function
+
+```{r myglance-cvfit0}
+glance(cvfit_a0_glance)
 ```
 
 Optimal values of lambda `lambda.min` and `lambda.1se` extracted.
 
-* Using tibble created by `myglance`
+* From tibble created by `myglance()`
 
 ```{r lambdas-extracted}
 (lmbda_a0.min   <- cvfit_a0_glance[["lambda.min"]])
 (lmbda_a0.1se  <- cvfit_a0_glance[["lambda.1se"]])
 ```
 
-* Using c-v object.
+* Directly from `cv.glmnet` object.
 
 ```{r lambdas-extracted2}
-cvfit_a0$lambda.min  # Alternative way 
+cvfit_a0$lambda.min 
 cvfit_a0$lambda.1se
 # Express lambda on natural log scale
 log(lmbda_a0.min)
 ```
 
 ### Tidy
+
+Tibble contains cross validated value of the loss function (with confidence interval) for each lambda.
 
 ```{r mytidy_cvfit0}
 (cvfit_a0_tidy <- mytidy(cvfit_a0))
@@ -549,30 +561,25 @@ Prepare test data. It contains
 
 ```{r Prepare-test-data}
 
-test_rows <- 1:100 # nrow(data_drop_na) # Select rows for testing. Possibly all rows in data_drop_na.
+test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data.
 #x_test <- x[test_rows,]
 #y_test <- y[test_rows,]
 #ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
 
-data_test <- data_drop_na[test_rows, ]
-range(data_test$time)
+test_data <- train_data[test_rows, ]
+range(test_data$time)
 ```
 
-```{r objects needed}
 
-
-data_train <- data_drop_na
-rm(data_drop_na)
-```
 
 ```{r save-train-objects, include =FALSE}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars, data_train, data_test,  file = fpath1)
+save(vars, train_data, test_data,  file = fpath1)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
 ```
 
-`data_test` contains all variables listed in `vars` vector (without missing values)
+`test_data` contains all variables listed in `vars` vector (without missing values)
 
 ```{r aux-objects}
 sel3_no <-3
@@ -582,12 +589,12 @@ rm(a_opt, lmbda_opt)
 a_opt      <- sel[["alpha"]]
 lmbda_opt <- sel[["lmbda"]]
 
-dtx_test <- subset(data_test, select=-c(time,status))
+dtx_test <- subset(test_data, select=-c(time,status))
 x_test <- model.matrix(~0 +., data=dtx_test)
 dim(x_test)
 colnames(x_test)
 # Create Surv object
-y_test <- data.matrix(data_test[,c("time", "status")])
+y_test <- data.matrix(test_data[,c("time", "status")])
 ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
 
 ```
@@ -640,7 +647,7 @@ Cindex(predM_lp, ySurv_test)   # For optimal lambda
 
 
 ```{r surv-roc}
-dataM_test <- data_test
+dataM_test <- test_data
                 
 ## Augment `dataM_test` with linear predictor
  dataM_test$predM_lp <- predM_lp
@@ -684,7 +691,7 @@ Create `mod_all` object.
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = data_train)
+  fit(Surv(time, status) ~ ., data = train_data)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
@@ -700,7 +707,7 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = data_train)
+  fit(Surv(time, status) ~ ., data = train_data)
 class(mod_opt)
 ```
 
