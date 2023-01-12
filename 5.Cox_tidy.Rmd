@@ -265,7 +265,7 @@ Similar plot (not shown) can be obtained using `plot()` function.
 
 ```{r L-1norm-a0-plot2}
 # plot(pfit_a0, label = TRUE) # L1 norm on x-axis
-coefplot(pfit_a0)
+# coefplot(pfit_a0)  # Needs work
 ```
 
 Plot path of (standardized) coefficients (y-axis)  versus  $\lambda$ (x-axis).
@@ -314,8 +314,8 @@ cvfit_a0_glance[c(1, 4, 5, 9)] # items (part 2)
 
 Similar output using `glance()` function
 
-```{r myglance-cvfit0}
-glance(cvfit_a0_glance)
+```{r glance-cvfit0}
+glance(cvfit_a0)
 ```
 
 Optimal values of lambda `lambda.min` and `lambda.1se` extracted.
@@ -544,15 +544,11 @@ betas %>%  print(n = 26)
 
 ## Models for optimal $\alpha$
 
-More precisely, we extract sequence of models corresponding to diffrent values of $\lamba$
+More precisely, we extract sequence of models corresponding to different values of $\lamba$
 for _optimal_ value of $\alpha$
 
 ```{r cva-modlist}
 cva_modlist <- cva_pfit$modlist
-cv_opt_model <- cva_modlist[[a_idxopt]]
-class(cv_opt_model)
-pfit_aopt  <- cv_opt_model$glmnet.fit
-class(pfit_aopt)
 ```
 
 # Intermediate step
@@ -574,7 +570,7 @@ range(test_data$time)
 
 ```{r save-train-objects, include =FALSE}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars, train_data, test_data,  file = fpath1)
+save(vars, train_data, sel3long, cva_modlist, file = fpath1)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
 ```
@@ -585,9 +581,20 @@ save(vars, train_data, test_data,  file = fpath1)
 sel3_no <-3
 (sel <-sel3long[sel3_no,])
 
-rm(a_opt, lmbda_opt)
+rm(a_opt, lmbda_opt, a_idxopt)
+a_idxopt  <- sel[["a_idx"]]
 a_opt      <- sel[["alpha"]]
 lmbda_opt <- sel[["lmbda"]]
+
+cv_opt_model <- cva_modlist[[a_idxopt]]
+class(cv_opt_model)
+pfit_aopt  <- cv_opt_model$glmnet.fit
+class(pfit_aopt)
+
+
+
+
+
 
 dtx_test <- subset(test_data, select=-c(time,status))
 x_test <- model.matrix(~0 +., data=dtx_test)
