@@ -332,6 +332,13 @@ pred_M
 pred_M %>% unnest(.pred)
 ```
 
+Summary statistics for linear predictor
+
+```{r summary-lp-tidy}
+summary(pred_M$.pred_linear_pred)
+```
+
+
 ## C-index
 
 
@@ -341,7 +348,7 @@ summ_M <- pred_M %>%
 summ_M$Cindex
 ```
 
-## Plot reedicted
+## Plot predicted time
 
 * Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
 
