@@ -1,6 +1,10 @@
 # Auxiliary code sourced by other R programs
-options(width=70)
+options(width = 70)
+  
 nmRmd <- paste0(bnm, ".Rmd")
 nmR <- paste0("./purl/", bnm,".Rprog")
 knitr::purl(nmRmd, output = nmR)
-rmarkdown::render(nmRmd, "all")
+
+parms <- list(mod_lbl ="M0")  #  <-----
+output_file <- paste0(bnm,"_", parms$mod_lbl)
+rmarkdown::render(nmRmd, "all", output_file = output_file, params = parms)

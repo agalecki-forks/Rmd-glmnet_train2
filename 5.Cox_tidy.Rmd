@@ -1,0 +1,790 @@
+---
+title: 'Regularized Cox Regression Model'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+params:
+   mod_lbl: "M0" 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+mod_lbl <- params$mod_lbl # Model label
+```
+
+```{r, data, include = FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolki 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  glmnetUtils,  #Glmnet models for multiple alpha
+  coefplot,     # Plotting Model Coefficients
+  survival,     #survival model 
+  tidymodels,   #for modeling and machine learning using tidyverse principles
+  survivalROC   #survivalROC
+  )
+```
+
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+This script was (successfully) tested using version *`r uag_ver0`* of the `utilsag` package.
+
+Information on current installation of `utilsag` package is as follows: 
+
+```{r utilsag-info, include = FALSE}
+.libPaths()
+uag_path <- system.file(package = "utilsag")
+uag_ver  <- if (uag_path != ""){
+     as.character(packageVersion("utilsag"))} else ""
+```
+
+* Path to `utilsag`: `r uag_path` 
+* `utilsag` version: *`r uag_ver`* 
+
+
+```{r install-tested-utilsag, include=FALSE}
+uag_ref0 <- paste0("version-", uag_ver0)
+
+if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+
+if (uag_ver != uag_ver0){
+   devtools::install_github("agalecki/utilsag", ref = uag_ref0)
+}
+library(utilsag)
+```
+ 
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as needed.
+
+
+
+# Introduction (`r mod_lbl`)
+
+In this report we consider Cox regression model `r mod_lbl` for the time-to-event `time` variable. 
+
+<!-- Conditonal text inserted -->  
+`r if(mod_lbl == "M0"){
+"Model M0 contains baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
+}`
+
+`r if(mod_lbl == "M1"){
+"Model M1 contains 21 proteins as candidate predictors."
+}`
+
+
+`r if(mod_lbl == "M2"){
+"Model M2 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
+}`
+<!-- Conditonal text ends --> 
+
+Notes: 
+
+* Originally `time` variable was named `FU_TIME`.  
+* `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
+
+## Auxiliary functions
+
+For reference, arguments of selected functions in `utilsag` package are shown below:
+
+```{r  pred-coxnet}
+str(formals("pred_censored_coxnet"))
+```
+
+## Data prep
+
+Data are prepared for Cox regression.        
+
+```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+#read the data that is stored under the data folder
+
+dt <- read_excel("./Data/data_example.xlsx")
+
+dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
+
+dim(dt) # Number of rows and columns in the input data
+```
+Variable names used in Cox regression model are stored in the following vectors:
+
+* Proteins in `prot_npx`,
+* Time/status in `surv_vars`,
+* Clinical variables in `clin_vars`
+
+```{r Variables-used-Cox}
+prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
+              "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
+surv_vars <-  c("time", "status")
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+```
+
+
+
+Data preparation: 
+
+* Vector `vars`  contains all variable names needed to specify model `r mod_lbl` 
+considered in this document
+
+```{r select-vars, include =FALSE}
+
+if (mod_lbl == "M0") vars <- c(surv_vars, clin_vars) 
+if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M2") vars <- c(surv_vars, prot_npx, clin_vars) 
+
+```
+
+```{r vars vector}
+vars
+```
+
+* Create dataset `data` that contains subset of all vars needed for the analysis.
+
+```{r data-prep1}
+data <- dt  %>% select(all_of(vars)) 
+dim(data)         
+```
+
+* Keep rows with complete cases in `train_data` dataframe.
+
+
+```{r data-prep2}
+#drop any records with NA
+train_data <- data %>% drop_na()    
+
+#Total sample size
+nrow(train_data)
+```
+
+* Create X matrix and Surv object required by `glmnet`.
+
+```{r model-mtx}
+# Create X matrix
+dtx <- subset(train_data, select=-c(time,status))
+x <- model.matrix(~0 +., data=dtx)
+dim(x)
+colnames(x)
+# Create Surv object
+y <- data.matrix(train_data[,c("time", "status")])
+ySurv <- survival::Surv(y[,"time"], y[, "status"])
+```
+
+* Create cv-folds (nfolds = 10 is default in `cv.glmnet`)
+
+```{r foldid-1}
+set.seed(1234)
+nfolds <-10
+foldid <- sample(1:nfolds, size = nrow(train_data), replace=TRUE)
+length(foldid)
+```
+
+* Table with fold sizes is included below.
+
+```{r foldid-2}
+tibble(foldid = foldid) %>% group_by(foldid) %>% count()
+```
+
+# Ridge regression ($\alpha=0$)
+
+Fit ridge Cox regression using `glmnet`.
+
+```{r glmnet-pfit-a0, echo=TRUE, message=FALSE, warning=FALSE}
+#fit the cox regression model
+pfit_a0 <- glmnet(x, ySurv, family = "cox", alpha = 0)
+```
+
+## Explore glmnet fit 
+
+Explore `glmnet` fit using `myglance()` and `mytidy()` functions.
+
+### Glance
+
+Glance `glmnet` model fit. 
+
+```{r myglance-a0}
+(pfit_a0_glance <- myglance(pfit_a0)) 
+# glance(pfit_a0) # Less detailed info
+```
+
+### Tidy
+
+Tidy Cox regression output.
+
+```{r mytidy-a0}
+(pfit_a0_tidy <- mytidy(pfit_a0))
+```
+
+Similar output (not shown) can be obtained using `tidy()` function.
+
+```{r tidy-a0}
+# tidy(pfit_a0) %>% nest(beta =c(term,estimate))
+```
+
+### Coefficient plots
+
+Preparing data for plots
+
+```{r mytidy-a0-plot-df}
+dfg <- pfit_a0_tidy %>% unnest(beta) %>% group_by(step) 
+dfx <- dfg %>%  summarize(L1_norm = sum(abs(estimate))) %>%
+ right_join(dfg, by ="step")
+```
+
+Path of (standardized) coefficients (y-axis) is plotted versus $\ell_1$-norm (x-axis).
+Each curve corresponds to a covariate. 
+
+```{r mytidy-a0-plot}
+theme_set(theme_minimal())
+ggplot(dfx, aes(x = L1_norm, y = estimate)) +
+       geom_line(aes(color = term)) +
+       xlab("L1 norm") + ylab("Coefficients") 
+```
+
+Similar plot (not shown) can be obtained using `plot()` function.
+
+```{r L-1norm-a0-plot2}
+# plot(pfit_a0, label = TRUE) # L1 norm on x-axis
+# coefplot(pfit_a0)  # Needs work
+```
+
+Plot path of (standardized) coefficients (y-axis)  versus  $\lambda$ (x-axis).
+Each curve corresponds to a covariate. 
+
+```{r mytidy-coef-plot}
+
+ggplot(dfg , aes(x = log(lambda), y = estimate)) +
+       geom_line(aes(color = term)) + ylab("Coefficients")
+```
+
+Similar plot (not shown) can be obtained using `plot()` function.
+
+
+```{r coef-plot2}
+
+
+# plot(pfit_a0, xvar='lambda', label=TRUE)  # lambda on x-axis     
+
+```
+
+# C-V of glmnet model
+
+cv.glmnet ($\alpha$ =0)
+
+Cross validation (C-V) is perfomed using folds defined in `foldid` vector. 
+
+```{r, cv_glmnet-a0, echo=TRUE, message=FALSE, warning=FALSE}
+# cross-validate model
+(cvfit_a0 <- cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid))
+```
+
+## Exploring C-V object
+
+
+### Glance 
+
+Glance object `cvfit_a0` using `myglance()` function.
+
+```{r myglance-cvfit0}
+cvfit_a0_glance <- myglance(cvfit_a0)
+colnames(cvfit_a0_glance)
+cvfit_a0_glance[c(1:3, 6:8)]   # items (part 1)
+cvfit_a0_glance[c(1, 4, 5, 9)] # items (part 2)
+```
+
+Similar output using `glance()` function
+
+```{r glance-cvfit0}
+glance(cvfit_a0)
+```
+
+Optimal values of lambda `lambda.min` and `lambda.1se` extracted.
+
+* From tibble created by `myglance()`
+
+```{r lambdas-extracted}
+(lmbda_a0.min   <- cvfit_a0_glance[["lambda.min"]])
+(lmbda_a0.1se  <- cvfit_a0_glance[["lambda.1se"]])
+```
+
+* Directly from `cv.glmnet` object.
+
+```{r lambdas-extracted2}
+cvfit_a0$lambda.min 
+cvfit_a0$lambda.1se
+# Express lambda on natural log scale
+log(lmbda_a0.min)
+```
+
+### Tidy
+
+Tibble contains cross validated value of the loss function (with confidence interval) for each lambda.
+
+```{r mytidy_cvfit0}
+(cvfit_a0_tidy <- mytidy(cvfit_a0))
+# tidy(cvfit_a0)
+```
+### C-V curves plot 
+
+
+We will use `ggplot()` function to display cross-validation curve with upper and lower standard deviation along
+the $\lambda$ sequence. Two selected $\lambda$s are indicated by the vertical dotted lines.
+
+```{r cv-curve-plot-a0}
+ggplot(cvfit_a0_tidy, aes(x = log(lambda), y = estimate)) +
+  geom_line() +
+  geom_point(size=3, shape=21, fill="red") +   # 21 is filled circle  
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = .1, color="grey") +
+  geom_vline(xintercept = log(lmbda_a0.min), color ="blue", linetype="dotted") +
+  geom_vline(xintercept = log(lmbda_a0.1se), color ="blue", linetype="dotted") +
+  xlab("Log(Lambda)") + ylab("Partial likelihood deviance") +ggtitle("C-V curve (alpha=0)")
+```
+
+Similar plot can be obtained using `plot()` function
+
+```{r cv-curve-plot2-a0}
+# plot(cvfit_a0)    # Similar plot (not shown) 
+```
+
+### Coefficients
+
+Regression coefficients for selected $\lambda$s using tidy approach. 
+
+```{r mytidy-coefs-init}
+a0_min <- pfit_a0_tidy %>%
+         select (lambda,df, beta)%>% filter(near(lambda, lmbda_a0.min)) %>% mutate(lbl="a0_min")
+a0_1se <- pfit_a0_tidy %>%
+         select (lambda,df, beta)%>% filter(near(lambda, lmbda_a0.1se)) %>% mutate(lbl="a0_1se")
+rbind(a0_min,a0_1se)  %>% unnest(beta) %>% select(term, lbl, estimate) %>%
+  pivot_wider(names_from = lbl, values_from = estimate) # transpose
+```
+
+Similar results (not shown) can be obtained using `coef()` function.
+
+```{r coefs-init}
+#  coef(cvfit_a0, s = "lambda.min")
+#  coef(cvfit_a0, s = "lambda.1se")
+```
+
+### Survival curve
+
+Plotting survival curve for a fitted model
+
+See examples at: https://glmnet.stanford.edu/reference/survfit.coxnet.html
+
+Notes: 
+
+* `survfit()` function computes survivor function for a Cox PH model with elastic net penalty.
+* the design matrix x and response ySurv used to fit the model need to be passed to `survfit` function
+
+```{r surv2-plot}
+# survfit object for penalized Cox model
+(lmbda0 <- lmbda_a0.1se) # Lambda selected
+sfx <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv)
+plot(sfx)
+```
+
+Note that the same plot can be obtained using the code below.
+
+```{r surv-plot-mean}
+xmean <- apply(x, 2, mean)
+sfm <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv, newx = xmean)
+# plot(sfm)
+```
+
+Survival curves by sex.
+
+```{r surv-plot-mean2}
+x1 <- x2 <- xmean
+x1["SEX"] <-1
+x2["SEX"] <-2
+xx <- t(cbind(x1,x2))
+sfm2 <- survival::survfit(pfit_a0, s = lmbda0, x = x, y = ySurv, newx = xx)
+plot(sfm2)
+
+```
+
+
+
+
+# Multiple alpha
+
+* glmnetUtils package
+* Glmnet models for multiple alpha 
+* We use cross-validation to tune hyperparameter $\alpha$.
+* The idea of "explicitly control the fold" is implemented in `glmnetUtils` package
+* The cva.glmnet function does simultaneous cross-validation for both the $\alpha$ and $\lambda$ parameters in an elastic net model.
+
+source: (https://glmnet.stanford.edu/articles/glmnet.html)
+
+## cva.glmnet
+
+Use `cva.glmnet()` function
+
+```{r glmnetUtils}
+
+alphv <- seq(0, 1, len = 11)^3
+cva_pfit <- cva.glmnet(x = x, y = ySurv, family = "cox", alpha = alphv, foldid = foldid)
+# minlossplot(cva_pfit)
+```
+
+
+## Explore cva.glmnet
+
+### Myglance
+
+* Note: --  No `glance` method for objects of class cva.glmnet
+
+```{r cva-myglance}
+(cva_pfit_glance <- myglance(cva_pfit))
+```
+
+### Mytidy
+
+`mytidy()` function used for `cva` object generates list with 3 components.
+
+* Note: No tidy method for objects of class cva.glmnet
+
+```{r cva-mytidy-create}
+cva_pfit_tidy <- mytidy(cva_pfit)
+mode(cva_pfit_tidy)  # List
+names(cva_pfit_tidy) # Component names
+# 
+```
+
+Show `mytidy` components
+
+```{r cva-mytidy-show}
+(cva_alpha <- cva_pfit_tidy$alpha_info) # One row per alpha hyperparameter
+(cva_loss <- cva_pfit_tidy$glmnet.cv)   # Tibble grouped by a_idx
+(cva_beta <- cva_pfit_tidy$glmnet_beta) 
+```
+
+# C-V results
+
+## Optimal hyperparameters
+
+We select subset of $\alpha$ (and corresponding optimal $\lambda$ values)  for further
+consideration.
+
+Identify optimal alpha (global minimum for loss function)
+
+```{r identify-alpha-opt}
+alpha_opt_tbl <- ungroup(cva_loss) %>% filter (estimate == min(estimate))
+a_idxopt <- alpha_opt_tbl[["a_idx"]]
+a_idxopt  # index for optimal alpha
+```
+ 
+   
+```{r optm}
+(optm <- cva_alpha[a_idxopt,])
+(a_opt      <- optm[['alpha']])
+(lmbda_min  <- optm[['lambda.min']])
+(lmbda_1se  <- optm[['lambda.1se']])
+lmbda_opt   <- lmbda_1se    # choose value 
+```
+
+## Auxiliary tables
+
+Auxiliary tables with selected alpha values:
+
+```{r select3-wide}
+(sel3wide <- cva_alpha %>%  select(a_idx, alpha, lambda.min, lambda.1se) %>%
+     filter(a_idx %in% c(1,a_idxopt,11))
+     )
+```
+ 
+```{r select3-long}   
+(sel3long <- sel3wide %>% gather(lmbda_lbl, lmbda, -c(a_idx, alpha)) %>%
+   mutate(lbl = paste0("a_", a_idx,"_", substr(lmbda_lbl,8,10))) %>%
+   arrange(a_idx)            
+)
+```
+
+
+
+## Regression coefficients
+
+* Coefficients of selected models
+
+```{r betas-overview}
+lj <- left_join(sel3wide, cva_loss, by = "a_idx") %>% # keys: a_idx, step
+        select(a_idx, alpha, lambda.min, lambda.1se, step, lambda)
+lj_min <- lj %>% filter(near(lambda, lambda.min)) %>% # selected rows with lambda.min
+     mutate(lbl = paste0("a_", a_idx,"_min"))  
+lj_1se <- lj %>% filter(near(lambda, lambda.1se)) %>% # selected rows with lambda.1se
+     mutate(lbl = paste0("a_", a_idx,"_1se"))
+betas <-rbind(lj_min, lj_1se) %>% select(-c(lambda.min, lambda.1se)) %>%
+   arrange(a_idx, desc(step)) %>%                  # sort
+   left_join(cva_beta, by =c("a_idx", "step")) %>% 
+   select(c(term, lbl, estimate)) %>%
+   pivot_wider(names_from = lbl, values_from = estimate) # transpose 
+betas %>%  print(n = 26)
+```   
+
+## Models for optimal $\alpha$
+
+More precisely, we extract sequence of models corresponding to different values of $\lamba$
+for _optimal_ value of $\alpha$
+
+```{r cva-modlist}
+cva_modlist <- cva_pfit$modlist
+```
+
+# Intermediate step
+
+Prepare test data. It contains  
+
+```{r Prepare-test-data}
+
+test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data.
+#x_test <- x[test_rows,]
+#y_test <- y[test_rows,]
+#ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
+
+test_data <- train_data[test_rows, ]
+range(test_data$time)
+```
+
+
+
+```{r save-train-objects, include =FALSE}
+fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
+save(vars, train_data, sel3long, cva_modlist, file = fpath1)
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+```
+
+`test_data` contains all variables listed in `vars` vector (without missing values)
+
+```{r aux-objects}
+sel3_no <-3
+(sel <-sel3long[sel3_no,])
+
+rm(a_opt, lmbda_opt, a_idxopt)
+a_idxopt  <- sel[["a_idx"]]
+a_opt      <- sel[["alpha"]]
+lmbda_opt <- sel[["lmbda"]]
+
+cv_opt_model <- cva_modlist[[a_idxopt]]
+class(cv_opt_model)
+pfit_aopt  <- cv_opt_model$glmnet.fit
+class(pfit_aopt)
+
+
+
+
+
+
+dtx_test <- subset(test_data, select=-c(time,status))
+x_test <- model.matrix(~0 +., data=dtx_test)
+dim(x_test)
+colnames(x_test)
+# Create Surv object
+y_test <- data.matrix(test_data[,c("time", "status")])
+ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
+
+```
+
+
+# Model Performance
+
+This section should be considered as an illustration only, because the `glmnet` model
+performance is assessed using training data. For this reason performance of the model
+is too optimistic.
+
+
+## Preparatory steps
+
+* Step 1.  Object `pfit_aopt` contains model fits for optimal alpha. It was created earlier in this document 
+It contains model fits for multiple lambdas. 
+
+
+
+Step 3: Calculate predicted values for test data
+
+```{r calc-pred2}
+predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+summary(predM_lp)
+```
+
+## Predictive performance 
+
+Predictive performance of optimal model 
+
+### C-index
+
+Ref: Harrel Jr, F. E. and Lee, K. L. and Mark, D. B. (1996) Tutorial in biostatistics:
+multivariable prognostic models: issues in developing models, evaluating assumptions 
+and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pages 361-387.
+
+
+```{r C-index-Mod}
+Cindex_lmbda <- apply(predM_lpmtx, 2, Cindex, y = ySurv_test) # Multiple lambda
+length(Cindex_lmbda)
+Cindex_lmbda[1:12] 
+
+Cindex(predM_lp, ySurv_test)   # For optimal lambda
+```
+
+### Time-dependent ROC
+
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
+
+```{r surv-roc}
+dataM_test <- test_data
+                
+## Augment `dataM_test` with linear predictor
+ dataM_test$predM_lp <- predM_lp
+
+# Evaluate every 2.5 years
+ 
+tx <- 2.5* c(2,3,4,5,6) # ROC time points
+tx
+survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+ 
+# survROC_lp %>% print (n=100)
+```
+
+* Plot Time-dependent ROC every 2.5 years
+
+```{r surv-roc-plot}
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp) 
+```
+
+
+# Tidymodels
+
+Fit optimal models using tidymodels
+Based on (https://parsnip.tidymodels.org/reference/details_proportional_hazards_glmnet.html)
+
+```{r tidy-libs}
+library(survival)
+library(censored)
+library(dplyr)
+library(tidyr)
+```
+
+
+## Model fits 
+
+Create `mod_all` object.
+
+```{r tidy-Mod-all}
+# Model for all alpha
+mod_all <- map(alphv, function(a){
+  proportional_hazards(penalty = tune(), mixture = a) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = train_data)
+})
+length(mod_all)
+tmp <- mod_all[[2]]
+class(tmp)
+```
+
+* Create `mod_opt` object using optimal set of hyperparameters obtained in earlier section.
+
+```{r tidy-Mod-opt}
+print(a_opt)      #  optimal alpha
+print(lmbda_opt)  #  optimal lambda
+
+mod_opt <- 
+  proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = train_data)
+class(mod_opt)
+```
+
+
+# Tidy assessment
+
+
+Create tibble with predicted values for `r mod_lbl`:
+Predicted values are calculated for:
+
+* Linear predictor (`.pred_linear_pred`)
+* Survival time (`.pred_time`)
+* Survival probabilities at selected time points (`.pred`)
+
+```{r  pred-coxnet-mod-opt}
+pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
+pred_M
+
+pred_M %>% unnest(.pred)
+```
+
+
+
+```{r Cindex-tidy}
+summ_M <- pred_M %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M$Cindex
+```
+
+* Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
+
+```{r plot-predM}
+   
+range(pred_M$time)
+range(pred_M$.pred_time)
+
+ggplot(pred_M, aes(x = time, y= .pred_time)) +
+     coord_fixed() +            # ratio parameter defaults to 1
+     xlim(0,17) + ylim(0, 17) +
+     geom_point(aes(color = factor(status))) +
+     geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
+
+```
+
+```{r plot-timedep-ROC-pred_M}
+tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+tx
+survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_data) 
+```
+
+
+* save selected objects for post-processing
+
+```{r save-objects, include =FALSE}
+#- fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
+#save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
+
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, file = fpath2)
+```
+
+* Reinstall original version of `r "utilsag"` package
+
+```{r reinstall-original-utilsag, include=FALSE}
+
+if (uag_ver != uag_ver0){ # reinstall original utilsag version
+    if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+    devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
+}
+```

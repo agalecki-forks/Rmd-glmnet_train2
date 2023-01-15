@@ -1,0 +1,27 @@
+<!-- Conditonally utilsag package installed -->
+<!-- `uag_ver0` string with package version is required -->
+This script was (successfully) tested using version *`r uag_ver0`* of the `utilsag` package.
+
+Information on current installation of `utilsag` package is as follows: 
+
+```{r utilsag-info, include = FALSE}
+.libPaths()
+uag_path <- system.file(package = "utilsag")
+uag_ver  <- if (uag_path != ""){
+     as.character(packageVersion("utilsag"))} else ""
+```
+
+* Path to `utilsag`: `r uag_path` 
+* `utilsag` version: *`r uag_ver`* 
+
+
+```{r install-tested-utilsag, include=FALSE}
+uag_ref0 <- paste0("version-", uag_ver0)
+
+if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+
+if (uag_ver != uag_ver0){
+   devtools::install_github("agalecki/utilsag", ref = uag_ref0)
+}
+```
+ 
