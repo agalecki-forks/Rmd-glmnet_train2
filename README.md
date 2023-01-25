@@ -5,6 +5,10 @@
 
 # Notes 
 
+https://github.com/tidymodels/planning/blob/main/survival-analysis/README.md
+
+yardtick::ccc
+
 ## Categorical covariates
  
  "... if you're interested in interpreting your model or discussing which factors are important after the fact, 
