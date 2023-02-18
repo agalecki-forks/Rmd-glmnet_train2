@@ -177,6 +177,23 @@ train_data <- data %>% drop_na()
 nrow(train_data)
 ```
 
+
+## survSplit
+
+* Create data set that is censored at 15 (time horizon)
+
+```{r survSplit}
+temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = 15,
+                  episode = "epsd")
+dim(train_data)
+train_data15 <- subset(temp, epsd == 1)  # only the first 15 years
+dim(train_data15)
+train_data    <- train_data15
+```
+
+
+## X matrix
+
 * Create X matrix and Surv object required by `glmnet`.
 
 ```{r model-mtx}
