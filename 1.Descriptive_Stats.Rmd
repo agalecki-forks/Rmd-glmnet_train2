@@ -59,7 +59,7 @@ Variable names are listed below.
 names(scrambled_orig)
 ```
 
-```{r, table1, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+```{r, table1, echo=FALSE, message=FALSE, warning=FALSE}
 scrambled2 <- scrambled  %>% 
           mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
               Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                                
