@@ -113,6 +113,7 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
 clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+xvars <- c(clin_vars, prot_npx)
 ```
 
 
@@ -187,10 +188,27 @@ tmp <- sel3long %>% select(alpha) %>% unique()
 (alphv <- as.vector(t(tmp)))
 ```
 
+## survSplit
+
+* Create test_data  that is censored at 15 (time horizon)
+
+```{r survSplit}
+temp <- survSplit(Surv(time,  status) ~ ., data = test_data, cut = 15,
+                  episode = "epsd")
+dim(test_data)
+test_data15 <- subset(temp, epsd == 1)  # only the first 15 years
+dim(test_data15)
+test_data_saved <- test_data
+#test_data    <- test_data_saved ## test_data15
+```
+
+
+
 Matrix X and `Surv` object extracted from `test_data`
 
 ```{r x-surv-test}
-dtx_test <- subset(test_data, select=-c(time,status))
+# - dtx_test <- subset(test_data, select=-c(time,status))
+dtx_test <- test_data %>% select(all_of(xvars)) 
 x_test <- model.matrix(~0 +., data=dtx_test)
 dim(x_test)
 colnames(x_test)
@@ -225,6 +243,10 @@ predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
 summary(predM_lp)
 ```
+
+
+
+
  
 
 Step2: C-index calculations
@@ -241,6 +263,14 @@ Cindex_lmbda[1:12]
 
 Cindex(predM_lp, ySurv_test)   # For optimal lambda
 ```
+
+
+
+
+```{r exit1}
+knitr::knit_exit()
+```
+
 
 ## Time-dependent ROC
 

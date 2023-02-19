@@ -138,6 +138,7 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
 clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+xvars <- c(clin_vars,prot_npx)
 ```
 
 
@@ -198,7 +199,8 @@ train_data    <- train_data15
 
 ```{r model-mtx}
 # Create X matrix
-dtx <- subset(train_data, select=-c(time,status))
+# -dtx <- subset(train_data, select=-c(time,status))
+dtx <- train_data %>% select(all_of(xvars)) 
 x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
@@ -610,10 +612,8 @@ class(pfit_aopt)
 
 
 
-
-
-
-dtx_test <- subset(test_data, select=-c(time,status))
+# -dtx_test <- subset(test_data, select=-c(time,status))
+dtx_test <- test_data %>% select(all_of(xvars))
 x_test <- model.matrix(~0 +., data=dtx_test)
 dim(x_test)
 colnames(x_test)
