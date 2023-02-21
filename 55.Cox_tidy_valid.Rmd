@@ -199,7 +199,7 @@ dim(test_data)
 test_data15 <- subset(temp, epsd == 1)  # only the first 15 years
 dim(test_data15)
 test_data_saved <- test_data
-#test_data    <- test_data_saved ## test_data15
+test_data    <-  test_data15
 ```
 
 
@@ -228,6 +228,9 @@ class(pfit_aopt)
 ```
 
 # Model Performance 
+
+
+
 
 Predictive performance of a selected model using _standard_ approach.
 
@@ -267,9 +270,6 @@ Cindex(predM_lp, ySurv_test)   # For optimal lambda
 
 
 
-```{r exit1}
-knitr::knit_exit()
-```
 
 
 ## Time-dependent ROC
@@ -297,6 +297,9 @@ survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
 ```{r surv-roc-plot}
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
+```
+```{r exit1}
+knitr::knit_exit()
 ```
 
 
