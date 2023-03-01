@@ -3,6 +3,9 @@
  # Clears Global environment
  rm(list=ls())
  
+ source("./Rfun/create_survivalROC_data.R")
+ source("./Rfun/survivalROC_helper.R")
+
  names_aux <- function(basenm, mod_lbl){ 
    # mod_lbl M0, M1 or M2
    nmRmd <- paste0(basenm, ".Rmd")

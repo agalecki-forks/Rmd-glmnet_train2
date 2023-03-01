@@ -244,6 +244,7 @@ Estimate linear predictor values for the Cox model fitted to test data.
 ```{r calc-pred2}
 predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+predM_lp[1:10]
 summary(predM_lp)
 ```
 
@@ -287,9 +288,10 @@ dataM_test <- test_data
  
 tx <- 2.5* c(2,3,4,5,6) # ROC time points
 tx
+predM_lp[1:10]
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
  
-# survROC_lp %>% print (n=100)
+survROC_lp %>% print (n=50)
 ```
 
 * Plot Time-dependent ROC every 2.5 years
@@ -297,9 +299,6 @@ survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
 ```{r surv-roc-plot}
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
-```{r exit1}
-knitr::knit_exit()
 ```
 
 
@@ -404,6 +403,7 @@ ggplot(pred_M, aes(x = time, y= .pred_time)) +
 tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
 tx
 survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
+survROC_data %>% print(n=50)
 
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_data) 
@@ -427,4 +427,7 @@ if (uag_ver != uag_ver0){ # reinstall original utilsag version
     if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
     devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
 }
+```
+```{r exit1}
+knitr::knit_exit()
 ```
