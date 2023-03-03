@@ -159,17 +159,19 @@ nrow(test_data)
 
 Load info on selected models fitted using traininig data.
 
-```{r load-train-objects, include =FALSE}
+```{r load-train-objects}
 fpath1 <- paste0("./validation_input/5.Cox_tidy_valid", mod_lbl, ".Rdata")
 load (file = fpath1, verbose = TRUE)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+sel3long
 ```
 
 In this document, we assess performance of the model `r mod_lbl` with the hyperparameters
 listed below:
 
 ```{r hyperparametrs-selected}
+row_no
 (sel <- sel3long[row_no,])   # Select row with the info
 ```
 

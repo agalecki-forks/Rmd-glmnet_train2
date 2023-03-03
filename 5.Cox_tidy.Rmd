@@ -355,6 +355,31 @@ cvfit_a0$lambda.1se
 log(lmbda_a0.min)
 ```
 
+# glmnet lists
+
+```{r glmnet-list}
+alphv <- seq(0, 1, len = 11)^3
+glmnet_list <- lapply(alphv, FUN = function(a){
+  message("a=", a)
+  res <- glmnet::glmnet(x= x, y= ySurv, family = "cox", alpha = a)
+  invisible(res)
+})
+message("glmnet_list created")
+
+names(glmnet_list) <- paste0("a",alphv)
+```
+cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid))
+```{r cvglmnet-list}
+alphv <- seq(0, 1, len = 11)^3
+cvglmnet_list <- lapply(alphv, FUN = function(a){
+  message("a=", a)
+  res <- glmnet::cv.glmnet(x= x, y= ySurv, family = "cox", alpha = a, foldid = foldid)
+  invisible(res)
+})
+message("cvglmnet_list created")
+names(cvglmnet_list) <- paste0("a", alphv)
+```
+
 ### Tidy
 
 Tibble contains cross validated value of the loss function (with confidence interval) for each lambda.
@@ -576,7 +601,7 @@ Prepare test data. It contains
 
 ```{r Prepare-test-data}
 
-test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data.
+test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data will be included.
 #x_test <- x[test_rows,]
 #y_test <- y[test_rows,]
 #ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
@@ -587,14 +612,19 @@ range(test_data$time)
 
 
 
-```{r save-train-objects, include =FALSE}
+```{r save-train-objects}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars, train_data, sel3long, cva_modlist, file = fpath1)
+save(vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data not saved
+
+fpath1_train <- paste0("./save/5.Cox_tidy_train", mod_lbl, ".Rdata")
+save(train_data, file = fpath1_train) # train_data saved
+
+
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
 ```
 
-`test_data` contains all variables listed in `vars` vector (without missing values)
+`test_data` contains all variables listed in `vars` vector (complete cases only)
 
 ```{r aux-objects}
 sel3_no <-3
@@ -609,9 +639,9 @@ cv_opt_model <- cva_modlist[[a_idxopt]]
 class(cv_opt_model)
 pfit_aopt  <- cv_opt_model$glmnet.fit
 class(pfit_aopt)
+```
 
-
-
+```{r aux-objects2}
 # -dtx_test <- subset(test_data, select=-c(time,status))
 dtx_test <- test_data %>% select(all_of(xvars))
 x_test <- model.matrix(~0 +., data=dtx_test)
@@ -804,4 +834,8 @@ if (uag_ver != uag_ver0){ # reinstall original utilsag version
     if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
     devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
 }
+```
+
+```{r exit}
+knitr::knit_exit()
 ```
