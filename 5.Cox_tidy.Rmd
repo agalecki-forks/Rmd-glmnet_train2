@@ -189,7 +189,7 @@ temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = 15,
 dim(train_data)
 train_data15 <- subset(temp, epsd == 1)  # only the first 15 years
 dim(train_data15)
-train_data    <- train_data15
+train_data_saved    <- train_data15
 ```
 
 
@@ -200,12 +200,12 @@ train_data    <- train_data15
 ```{r model-mtx}
 # Create X matrix
 # -dtx <- subset(train_data, select=-c(time,status))
-dtx <- train_data %>% select(all_of(xvars)) 
+dtx <- train_data15 %>% select(all_of(xvars)) 
 x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
 # Create Surv object
-y <- data.matrix(train_data[,c("time", "status")])
+y <- data.matrix(train_data15[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
@@ -214,7 +214,7 @@ ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```{r foldid-1}
 set.seed(1234)
 nfolds <-10
-foldid <- sample(1:nfolds, size = nrow(train_data), replace=TRUE)
+foldid <- sample(1:nfolds, size = nrow(train_data15), replace=TRUE)
 length(foldid)
 ```
 
@@ -365,8 +365,9 @@ glmnet_list <- lapply(alphv, FUN = function(a){
   invisible(res)
 })
 message("glmnet_list created")
-
-names(glmnet_list) <- paste0("a",alphv)
+anms <- paste0("a:",1:length(alphv),":",alphv)
+anms[1:5]
+names(glmnet_list) <-anms 
 ```
 cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid))
 ```{r cvglmnet-list}
@@ -377,7 +378,7 @@ cvglmnet_list <- lapply(alphv, FUN = function(a){
   invisible(res)
 })
 message("cvglmnet_list created")
-names(cvglmnet_list) <- paste0("a", alphv)
+names(cvglmnet_list) <- anms
 ```
 
 ### Tidy
@@ -606,7 +607,7 @@ test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all ro
 #y_test <- y[test_rows,]
 #ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
 
-test_data <- train_data[test_rows, ]
+test_data <- train_data15[test_rows, ]
 range(test_data$time)
 ```
 
@@ -614,10 +615,10 @@ range(test_data$time)
 
 ```{r save-train-objects}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data not saved
+save(vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data15 not saved
 
 fpath1_train <- paste0("./save/5.Cox_tidy_train", mod_lbl, ".Rdata")
-save(train_data, file = fpath1_train) # train_data saved
+save(train_data15, file = fpath1_train) # train_data saved
 
 
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
@@ -745,7 +746,7 @@ Create `mod_all` object.
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train_data15)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
@@ -761,7 +762,7 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train_data15)
 class(mod_opt)
 ```
 

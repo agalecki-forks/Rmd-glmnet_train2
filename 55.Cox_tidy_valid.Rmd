@@ -153,8 +153,6 @@ test_data <- data %>% drop_na()
 nrow(test_data)
 ```
 
-
-
 # Preparatory steps
 
 Load info on selected models fitted using traininig data.
@@ -246,13 +244,10 @@ Estimate linear predictor values for the Cox model fitted to test data.
 ```{r calc-pred2}
 predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+predM_lp <- - predM_lp # !!!
 predM_lp[1:10]
 summary(predM_lp)
 ```
-
-
-
-
  
 
 Step2: C-index calculations
@@ -305,6 +300,16 @@ plot_timedep_ROC(survROC_lp)
 
 
 # Tidymodels
+
+```{r load-train2-objects}
+fpath1 <- paste0("./validation_input/5.Cox_tidy_train", mod_lbl, ".Rdata")
+load (file = fpath1, verbose = TRUE)
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+dim(train_data)
+names(train_data)
+```
+
 
 Fit optimal models using tidymodels
 Based on (https://parsnip.tidymodels.org/reference/details_proportional_hazards_glmnet.html)
