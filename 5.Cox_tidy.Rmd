@@ -1,5 +1,5 @@
 ---
-title: 'Regularized Cox Regression Model'
+title: '5.Regularized Cox Regression Model'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
 output:
@@ -156,7 +156,7 @@ if (mod_lbl == "M2") vars <- c(surv_vars, prot_npx, clin_vars)
 
 ```
 
-```{r vars vector}
+```{r vars-vector}
 vars
 ```
 
@@ -181,7 +181,8 @@ nrow(train_data)
 
 ## survSplit
 
-* Create data set that is censored at 15 (time horizon)
+* Create `train_data15` data that is censored at 15 (prediction horizon)
+* extra varibles are created
 
 ```{r survSplit}
 temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = 15,
@@ -189,13 +190,23 @@ temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = 15,
 dim(train_data)
 train_data15 <- subset(temp, epsd == 1)  # only the first 15 years
 dim(train_data15)
+names(train_data15)
 train_data_saved    <- train_data15
+```
+
+Selected vriables
+
+```{r head15}
+range(train_data15$time)
+range(train_data15$epsd)
+tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
+tt
 ```
 
 
 ## X matrix
 
-* Create X matrix and Surv object required by `glmnet`.
+* Use `train_data15` to create X matrix and Surv object required by `glmnet`.
 
 ```{r model-mtx}
 # Create X matrix
@@ -204,7 +215,11 @@ dtx <- train_data15 %>% select(all_of(xvars))
 x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
-# Create Surv object
+```
+
+## Create Surv object
+
+```{r surv-object}
 y <- data.matrix(train_data15[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
@@ -766,8 +781,11 @@ mod_opt <-
 class(mod_opt)
 ```
 
-
+```{r glmnet-fit}
+glmnet_fit <- mod_opt$fit
+coef(glmnet_fit, s = lmbda_opt)
 # Tidy assessment
+```
 
 
 Create tibble with predicted values for `r mod_lbl`:
