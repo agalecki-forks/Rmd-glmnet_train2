@@ -754,14 +754,21 @@ library(tidyr)
 
 ## Model fits 
 
+Select necessary variables
+
+```{r modify_train-data}
+train2_data15 <- train_data15 %>% select(all_of(vars))
+colnames(train2_data15)
+```
+
 Create `mod_all` object.
 
 ```{r tidy-Mod-all}
-# Model for all alpha
+# Models for all alpha
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data15)
+  fit(Surv(time, status) ~ ., data = train2_data15)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
@@ -777,7 +784,7 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data15)
+  fit(Surv(time, status) ~ ., data = train2_data15)
 class(mod_opt)
 ```
 
