@@ -244,7 +244,7 @@ Estimate linear predictor values for the Cox model fitted to test data.
 ```{r calc-pred2}
 predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
-predM_lp <- - predM_lp # !!!
+# predM_lp <- - predM_lp # !!!
 predM_lp[1:10]
 summary(predM_lp)
 ```
@@ -306,8 +306,9 @@ fpath1 <- paste0("./validation_input/5.Cox_tidy_train", mod_lbl, ".Rdata")
 load (file = fpath1, verbose = TRUE)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
-dim(train_data)
-names(train_data)
+dim(train_data15)
+names(train_data15)
+train_dt <- train_data15 %>%  select(all_of(vars))
 ```
 
 
@@ -331,14 +332,14 @@ Create `mod_all` object for selected `alpha`
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train_dt)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
 class(tmp)
 ```
 
-* Create `mod_opt` object by fitting models to `train_data` using selected set of 
+* Create `mod_opt` object by fitting models to `train_dt` using selected set of 
 hyperparameters.
 
 ```{r tidy-Mod-opt}
@@ -348,7 +349,7 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train_dt)
 class(mod_opt)
 ```
 
