@@ -1,4 +1,4 @@
-survivalROC_helper <-
+survivalROC_helpe_zzz<-
 function (t, data, mm, tt, ss) {
     message("survivalROC_helper(), March 1, 2023")
     survivalROC::survivalROC(Stime = data[[tt]], status = data[[ss]], 

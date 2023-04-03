@@ -16,7 +16,7 @@ names2_aux <- function(basenm, row_no){
 
 #---<<<--- 
 bnm <- "55.Cox_tidy_valid"      #  Basename of Rmd file (do not change it)
-parms <- list(row_no = 6)       #  Row_no (select one out of): 1,2,3,4,5,6 
+parms <- list(row_no = 1)       #  Row_no (select one out of): 1,2,3,4,5,6 
 
 #---<<<--- Do not make changes below
 nms <- names2_aux(bnm, parms$row_no)
