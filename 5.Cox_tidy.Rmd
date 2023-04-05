@@ -179,16 +179,21 @@ nrow(train_data)
 ```
 
 
-## survSplit
+## survSplit-cut
 
-* Create `train_data15` data that is censored at 15 (prediction horizon)
+```{r survSplit-cut}
+survSplit_cut <- 10
+```
+
+* Create `train_data15` data that is censored at `r survSplit_cut` years (prediction horizon)
 * extra varibles are created
 
 ```{r survSplit}
-temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = 15,
+
+temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = survSplit_cut,
                   episode = "epsd")
 dim(train_data)
-train_data15 <- subset(temp, epsd == 1)  # only the first 15 years
+train_data15 <- subset(temp, epsd == 1)  # only the first `r survSplit_cut` years
 dim(train_data15)
 names(train_data15)
 train_data_saved    <- train_data15
