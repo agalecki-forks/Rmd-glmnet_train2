@@ -16,7 +16,7 @@ row_no <- params$row_no #
 mod_lbl <- "M2" # Model M2 only   
 ```
 
-```{r, data, include = FALSE}
+```{r data, include = FALSE}
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -388,6 +388,8 @@ summ_M <- pred_M %>%
 summ_M$Cindex
 ```
 
+
+<!--  comment out
 ## Plot predicted time
 
 * Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
@@ -404,6 +406,8 @@ ggplot(pred_M, aes(x = time, y= .pred_time)) +
      geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
 
 ```
+comment ends -->
+
 
 ## Time-dependent ROC
 
@@ -436,6 +440,6 @@ if (uag_ver != uag_ver0){ # reinstall original utilsag version
     devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
 }
 ```
-```{r exit1}
+```{r exit1, include=FALSE}
 knitr::knit_exit()
 ```
