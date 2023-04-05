@@ -193,10 +193,12 @@ tmp <- sel3long %>% select(alpha) %>% unique()
 * Create test_data  that is censored at 15 (time horizon)
 
 ```{r survSplit}
-temp <- survSplit(Surv(time,  status) ~ ., data = test_data, cut = 15,
+message("survSplit_cut =", survSplit_cut)
+
+temp <- survSplit(Surv(time,  status) ~ ., data = test_data, cut = survSplit_cut,
                   episode = "epsd")
 dim(test_data)
-test_data15 <- subset(temp, epsd == 1)  # only the first 15 years
+test_data15 <- subset(temp, epsd == 1)  # only the first ?? years
 dim(test_data15)
 test_data_saved <- test_data
 test_data    <-  test_data15
@@ -283,7 +285,7 @@ dataM_test <- test_data
 
 # Evaluate every 2.5 years
  
-tx <- 2.5* c(2,3,4,5,6) # ROC time points
+tx <- 2.5* c(1,2,3,4) # ROC time points
 tx
 predM_lp[1:10]
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
@@ -389,7 +391,7 @@ summ_M$Cindex
 ```
 
 
-<!--  comment out
+<!--  commented out
 ## Plot predicted time
 
 * Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
@@ -412,7 +414,7 @@ comment ends -->
 ## Time-dependent ROC
 
 ```{r plot-timedep-ROC-pred_M}
-tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+tx <- 2.5* c(1,2,3,4)    # ROC time points 
 tx
 survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
 survROC_data %>% print(n=50)

@@ -193,7 +193,7 @@ survSplit_cut <- 10
 temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = survSplit_cut,
                   episode = "epsd")
 dim(train_data)
-train_data15 <- subset(temp, epsd == 1)  # only the first `r survSplit_cut` years
+train_data15 <- subset(temp, epsd == 1)  # only the first ?? years
 dim(train_data15)
 names(train_data15)
 train_data_saved    <- train_data15
@@ -635,7 +635,7 @@ range(test_data$time)
 
 ```{r save-train-objects}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data15 not saved
+save(survSplit_cut, vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data15 not saved
 
 fpath1_train <- paste0("./save/5.Cox_tidy_train", mod_lbl, ".Rdata")
 save(train_data15, file = fpath1_train) # train_data saved
@@ -729,7 +729,7 @@ dataM_test <- test_data
 
 # Evaluate every 2.5 years
  
-tx <- 2.5* c(2,3,4,5,6) # ROC time points
+tx <- 2.5* c(1,2,3,4) # ROC time points
 tx
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
  
@@ -822,6 +822,7 @@ summ_M <- pred_M %>%
 summ_M$Cindex
 ```
 
+<!-- Commented out
 * Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
 
 ```{r plot-predM}
@@ -836,9 +837,11 @@ ggplot(pred_M, aes(x = time, y= .pred_time)) +
      geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
 
 ```
+-->
+
 
 ```{r plot-timedep-ROC-pred_M}
-tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+tx <- 2.5* c(1,2,3,4)    # ROC time points 
 tx
 survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
 
