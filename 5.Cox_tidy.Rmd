@@ -638,7 +638,7 @@ fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
 save(survSplit_cut, vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data15 not saved
 
 fpath1_train <- paste0("./save/5.Cox_tidy_train", mod_lbl, ".Rdata")
-save(train_data15, file = fpath1_train) # train_data saved
+# save(train_data15, file = fpath1_train) # train_data saved
 
 
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
