@@ -190,7 +190,7 @@ tmp <- sel3long %>% select(alpha) %>% unique()
 
 ## survSplit
 
-* Create test_data  that is censored at 15 (time horizon)
+* Create test_data  that is administratively censored at `r survSplit_cut`(time horizon)
 
 ```{r survSplit}
 message("survSplit_cut =", survSplit_cut)
@@ -206,7 +206,7 @@ test_data    <-  test_data15
 
 
 
-Matrix X and `Surv` object extracted from `test_data`
+Matrix X and `Surv` object extracted from the `test_data`
 
 ```{r x-surv-test}
 # - dtx_test <- subset(test_data, select=-c(time,status))
