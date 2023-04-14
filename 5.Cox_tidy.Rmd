@@ -120,7 +120,7 @@ Data are prepared for Cox regression.
 dt <- read_excel("./Data/data_example.xlsx")
 
 dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
-  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
 
 dim(dt) # Number of rows and columns in the input data
 ```
