@@ -50,7 +50,8 @@ sessionInfo()
 xlsx_path = "./Data/data_example.xlsx"
 
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
-scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR))
+scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
+    filter(BL_eGFR >=45)
 ```
 Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
 Variable names are listed below.
@@ -70,7 +71,7 @@ scrambled2 <- scrambled  %>%
                  "WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", 
                  "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , 
                  "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , 
-                 "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")         
+                 "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")      
 
 scrambled2$FU_TIME_Death=as.numeric(scrambled2$FU_TIME_Death)
 
