@@ -95,7 +95,7 @@ Test data prepared for validation of Cox regression model `r mod_lbl`.
 dt <- read_excel("./validation_input/data_validation.xlsx")
 
 dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
-  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
 
 dim(dt) # Number of rows and columns in the input data
 ```
@@ -301,6 +301,12 @@ plot_timedep_ROC(survROC_lp)
 ```
 
 
+```{r exit0, include=FALSE}
+knitr::knit_exit()
+```
+
+<!-- commented out
+
 # Tidymodels
 
 ```{r load-train2-objects}
@@ -355,7 +361,9 @@ mod_opt <-
 class(mod_opt)
 ```
 
+comment ends -->
 
+<!-- commented out
 # Model Performance (tidy)
 
 
@@ -389,7 +397,7 @@ summ_M <- pred_M %>%
                 summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
 summ_M$Cindex
 ```
-
+comment ends -->
 
 <!--  commented out
 ## Plot predicted time
@@ -410,7 +418,7 @@ ggplot(pred_M, aes(x = time, y= .pred_time)) +
 ```
 comment ends -->
 
-
+<!-- commented out
 ## Time-dependent ROC
 
 ```{r plot-timedep-ROC-pred_M}
@@ -432,6 +440,7 @@ plot_timedep_ROC(survROC_data)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, file = fpath2)
 ```
+comment ends -->
 
 * Reinstall original version of `r "utilsag"` package
 
