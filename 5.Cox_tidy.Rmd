@@ -1,5 +1,5 @@
 ---
-title: 'Regularized Cox Regression Model'
+title: '5.Regularized Cox Regression Model'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
 output:
@@ -120,7 +120,7 @@ Data are prepared for Cox regression.
 dt <- read_excel("./Data/data_example.xlsx")
 
 dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
-  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0)
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
 
 dim(dt) # Number of rows and columns in the input data
 ```
@@ -138,6 +138,7 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
 clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+xvars <- c(clin_vars,prot_npx)
 ```
 
 
@@ -155,7 +156,7 @@ if (mod_lbl == "M2") vars <- c(surv_vars, prot_npx, clin_vars)
 
 ```
 
-```{r vars vector}
+```{r vars-vector}
 vars
 ```
 
@@ -177,16 +178,54 @@ train_data <- data %>% drop_na()
 nrow(train_data)
 ```
 
-* Create X matrix and Surv object required by `glmnet`.
+
+## survSplit-cut
+
+```{r survSplit-cut}
+survSplit_cut <- 10
+```
+
+* Create `train_data15` data that is censored at `r survSplit_cut` years (prediction horizon)
+* extra varibles are created
+
+```{r survSplit}
+
+temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = survSplit_cut,
+                  episode = "epsd")
+dim(train_data)
+train_data15 <- subset(temp, epsd == 1)  # only the first ?? years
+dim(train_data15)
+names(train_data15)
+train_data_saved    <- train_data15
+```
+
+Selected vriables
+
+```{r head15}
+range(train_data15$time)
+range(train_data15$epsd)
+tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
+tt
+```
+
+
+## X matrix
+
+* Use `train_data15` to create X matrix and Surv object required by `glmnet`.
 
 ```{r model-mtx}
 # Create X matrix
-dtx <- subset(train_data, select=-c(time,status))
+# -dtx <- subset(train_data, select=-c(time,status))
+dtx <- train_data15 %>% select(all_of(xvars)) 
 x <- model.matrix(~0 +., data=dtx)
 dim(x)
 colnames(x)
-# Create Surv object
-y <- data.matrix(train_data[,c("time", "status")])
+```
+
+## Create Surv object
+
+```{r surv-object}
+y <- data.matrix(train_data15[,c("time", "status")])
 ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```
 
@@ -195,7 +234,7 @@ ySurv <- survival::Surv(y[,"time"], y[, "status"])
 ```{r foldid-1}
 set.seed(1234)
 nfolds <-10
-foldid <- sample(1:nfolds, size = nrow(train_data), replace=TRUE)
+foldid <- sample(1:nfolds, size = nrow(train_data15), replace=TRUE)
 length(foldid)
 ```
 
@@ -334,6 +373,32 @@ cvfit_a0$lambda.min
 cvfit_a0$lambda.1se
 # Express lambda on natural log scale
 log(lmbda_a0.min)
+```
+
+# glmnet lists
+
+```{r glmnet-list}
+alphv <- seq(0, 1, len = 11)^3
+glmnet_list <- lapply(alphv, FUN = function(a){
+  message("a=", a)
+  res <- glmnet::glmnet(x= x, y= ySurv, family = "cox", alpha = a)
+  invisible(res)
+})
+message("glmnet_list created")
+anms <- paste0("a:",1:length(alphv),":",alphv)
+anms[1:5]
+names(glmnet_list) <-anms 
+```
+cv.glmnet(x, ySurv, family = "cox", alpha=0, foldid = foldid))
+```{r cvglmnet-list}
+alphv <- seq(0, 1, len = 11)^3
+cvglmnet_list <- lapply(alphv, FUN = function(a){
+  message("a=", a)
+  res <- glmnet::cv.glmnet(x= x, y= ySurv, family = "cox", alpha = a, foldid = foldid)
+  invisible(res)
+})
+message("cvglmnet_list created")
+names(cvglmnet_list) <- anms
 ```
 
 ### Tidy
@@ -557,25 +622,30 @@ Prepare test data. It contains
 
 ```{r Prepare-test-data}
 
-test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data.
+test_rows <- 1:100 # nrow(train_data) # Select rows for testing. Possibly all rows in train_data will be included.
 #x_test <- x[test_rows,]
 #y_test <- y[test_rows,]
 #ySurv_test <- survival::Surv(y_test[,"time"], y_test[,"status"] )
 
-test_data <- train_data[test_rows, ]
+test_data <- train_data15[test_rows, ]
 range(test_data$time)
 ```
 
 
 
-```{r save-train-objects, include =FALSE}
+```{r save-train-objects}
 fpath1 <- paste0("./save/5.Cox_tidy_valid", mod_lbl, ".Rdata")
-save(vars, train_data, sel3long, cva_modlist, file = fpath1)
+save(survSplit_cut, vars,  sel3long, cva_modlist, glmnet_list, cvglmnet_list, file = fpath1) # train_data15 not saved
+
+fpath1_train <- paste0("./save/5.Cox_tidy_train", mod_lbl, ".Rdata")
+# save(train_data15, file = fpath1_train) # train_data saved
+
+
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
 ```
 
-`test_data` contains all variables listed in `vars` vector (without missing values)
+`test_data` contains all variables listed in `vars` vector (complete cases only)
 
 ```{r aux-objects}
 sel3_no <-3
@@ -590,13 +660,11 @@ cv_opt_model <- cva_modlist[[a_idxopt]]
 class(cv_opt_model)
 pfit_aopt  <- cv_opt_model$glmnet.fit
 class(pfit_aopt)
+```
 
-
-
-
-
-
-dtx_test <- subset(test_data, select=-c(time,status))
+```{r aux-objects2}
+# -dtx_test <- subset(test_data, select=-c(time,status))
+dtx_test <- test_data %>% select(all_of(xvars))
 x_test <- model.matrix(~0 +., data=dtx_test)
 dim(x_test)
 colnames(x_test)
@@ -661,7 +729,7 @@ dataM_test <- test_data
 
 # Evaluate every 2.5 years
  
-tx <- 2.5* c(2,3,4,5,6) # ROC time points
+tx <- 2.5* c(1,2,3,4) # ROC time points
 tx
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
  
@@ -691,14 +759,21 @@ library(tidyr)
 
 ## Model fits 
 
+Select necessary variables
+
+```{r modify_train-data}
+train2_data15 <- train_data15 %>% select(all_of(vars))
+colnames(train2_data15)
+```
+
 Create `mod_all` object.
 
 ```{r tidy-Mod-all}
-# Model for all alpha
+# Models for all alpha
 mod_all <- map(alphv, function(a){
   proportional_hazards(penalty = tune(), mixture = a) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train2_data15)
 })
 length(mod_all)
 tmp <- mod_all[[2]]
@@ -714,12 +789,15 @@ print(lmbda_opt)  #  optimal lambda
 mod_opt <- 
   proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
   set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_data)
+  fit(Surv(time, status) ~ ., data = train2_data15)
 class(mod_opt)
 ```
 
-
+```{r glmnet-fit}
+glmnet_fit <- mod_opt$fit
+coef(glmnet_fit, s = lmbda_opt)
 # Tidy assessment
+```
 
 
 Create tibble with predicted values for `r mod_lbl`:
@@ -744,6 +822,7 @@ summ_M <- pred_M %>%
 summ_M$Cindex
 ```
 
+<!-- Commented out
 * Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
 
 ```{r plot-predM}
@@ -758,9 +837,11 @@ ggplot(pred_M, aes(x = time, y= .pred_time)) +
      geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
 
 ```
+-->
+
 
 ```{r plot-timedep-ROC-pred_M}
-tx <- 2.5* c(2,3,4,5,6)    # ROC time points 
+tx <- 2.5* c(1,2,3,4)    # ROC time points 
 tx
 survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
 
@@ -787,4 +868,8 @@ if (uag_ver != uag_ver0){ # reinstall original utilsag version
     if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
     devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
 }
+```
+
+```{r exit}
+knitr::knit_exit()
 ```

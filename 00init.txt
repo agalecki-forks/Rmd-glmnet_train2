@@ -1,6 +1,8 @@
 # Auxiliary code sourced by other R programs
 options(width = 70)
-  
+#source("./Rfun/create_survivalROC_data")
+#source("./Rfun/survivalROC_helper")
+
 nmRmd <- paste0(bnm, ".Rmd")
 nmR <- paste0("./purl/", bnm,".Rprog")
 knitr::purl(nmRmd, output = nmR)
