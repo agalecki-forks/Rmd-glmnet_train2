@@ -3,8 +3,8 @@
  # Clears Global environment
  rm(list=ls())
  
-  source("./Rfun/create_survivalROC_data.R")
-  source("./Rfun/survivalROC_helper.R")
+  #source("./Rfun/create_survivalROC_data.R")
+  #source("./Rfun/survivalROC_helper.R")
 
 names2_aux <- function(basenm, row_no){ 
    # row_no: 1 through 6
