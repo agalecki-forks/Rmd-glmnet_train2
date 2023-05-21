@@ -1,0 +1,247 @@
+---
+title: 'Descriptive Statistics'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+     lightbox: true
+     use_bookdown: true
+---
+
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+
+```{r pacman, echo=FALSE, message=FALSE, warning=FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolkit 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  corrplot
+  )
+```
+
+# R setup
+
+```{r  rsetup}
+sessionInfo()
+```
+
+# Univariate statistics
+
+
+```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
+xlsx_path = "./Data/data_example_non_NPX.xlsx"
+
+scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
+    filter(BL_eGFR >=45) %>%
+    filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+```
+Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
+Variable names are listed below.
+
+```{r var-names}
+names(scrambled_orig)
+```
+
+```{r, table1, echo=FALSE, message=FALSE, warning=FALSE}
+scrambled2 <- scrambled  %>% 
+          mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
+              Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                                
+          select(-INDEX,-SEX,-CASE_CONTROL) %>%
+          select("Gender","Status","Death" , "FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , 
+                 "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", 
+                 "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1",
+                 "WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", 
+                 "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , 
+                 "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , 
+                 "CD160","EPHA2","RELT","LTBR")      
+
+scrambled2$FU_TIME_Death=as.numeric(scrambled2$FU_TIME_Death)
+
+scrambled2 %>%
+  tbl_summary(by = Status, missing_text = "(Missing N)",   label = list(FU_TIME ~ "Follow-up Time (year)", FU_TIME_Death ~ "Follow-up Time until Death (year)", SBP_TL ~ "Baseline Systolic blood pressure (mm-Hg)", DBP_TL ~ "Baseline Diatolic blood pressure (mm-Hg)",AGEONSET_TL ~ "Age at T1D onset (year)", BMI_TL ~ "Baseline BMI (kg/m2)", AGE_TL ~ "Baseline Age (year)",B_HBA1C_PRC ~ "Baseline HbA1c (%)",DU_ACR ~ "Baseline ACR (mg/g Cr)",BL_eGFR ~"Baseline eGFR (mL/min/1/.73m2)",log10_B_HBA1C_PRC ~"log10 HbA1c", log10_DU_ACR ~"log10 ACR" ), type = all_continuous() ~ "continuous2", statistic = list(all_continuous() ~ c("{mean}, {sd}","{median} ({p25}, {p75})", "{min}, {max}"),all_categorical() ~ "{n} ({p}%)"))  %>%
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 2)) %>%
+  add_overall() %>%
+  add_n() %>%
+  modify_header(label ~ "**Variable**") %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Status**") %>%
+  modify_footnote( all_stat_cols() ~ "Mean (SD), Median (IQR) or Frequency (%)")%>%
+  modify_caption("**Table 1. Patient Characteristics**") %>%
+  bold_labels()
+```
+
+
+# Histograms
+
+```{r, histogram, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
+var_num <- scrambled  %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
+
+var_num %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_histogram(bins=20)
+
+```
+
+## Case
+
+```{r, histogram_case, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
+Case <- scrambled %>% filter (CASE_CONTROL==1) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
+
+Case %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_histogram(bins=20)
+
+```
+
+## Control
+
+```{r, histogram_control, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
+Control <- scrambled %>% filter (CASE_CONTROL==0) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
+
+Control %>%
+  keep(is.numeric) %>% 
+  gather() %>% 
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_histogram(bins=20)
+
+```
+
+# Protein Results
+
+## Spearman's Correlation Matrix
+
+```{r proteins-vec, include=FALSE}
+proteins <- c("KIM1",      "SYND1", "IL.1RT1","WFDC2", "CD27",
+              "TNFRSF10A", "LAYN",  "PVRL4",  "EDA2R" ,"TNFRSF4" ,
+              "GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,
+              "DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT",
+              "LTBR") 
+```
+
+Spearman-correlation coefficients are estimated for the following proteins:
+
+```{r proteins-list, echo=FALSE}
+proteins
+```
+
+```{r Correlation-table-proteins, echo=FALSE, message=FALSE, warning=FALSE}
+protein <- scrambled  %>% select(all_of(proteins))
+tab_corr(protein, p.numeric=TRUE, corr.method = c( "spearman"))
+```
+
+### Case
+```{r Correlation-table-proteins_c, echo=FALSE, message=FALSE, warning=FALSE}
+protein1 <- Case  %>% select(all_of(proteins))
+tab_corr(protein1, p.numeric=TRUE, corr.method = c( "spearman"))
+```
+
+### Control
+```{r Correlation-table-proteins_n, echo=FALSE, message=FALSE, warning=FALSE}
+protein2 <- Control  %>% select(all_of(proteins))
+tab_corr(protein2, p.numeric=TRUE, corr.method = c( "spearman"))
+```
+
+## Cluster dendrogram
+
+```{r Correlation-proteins, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 12, fig.height=8, dev ="svg"}
+
+cors <- cor(protein, method = c( "spearman"), use ="complete.obs")
+hcl <- hclust(as.dist(1-abs(cors)))
+plot(hcl, xlab ="Proteins", sub ="")
+```
+
+From `hclust` documentation: "In hierarchical cluster displays, a decision is needed at each merge to specify 
+which subtree should go on the left and which on the right. Since, for \(n\) observations there are \(n-1\) merges,
+there are \(2^{(n-1)}\) possible orderings for the leaves in a cluster tree, or dendrogram. The algorithm used 
+in hclust is to order the subtree so that the tighter cluster is on the left (the last, i.e., most recent, 
+merge of the left subtree is at a lower value than the last merge of the right subtree). Single observations
+are the tightest clusters possible, and merges involving two observations place them in order by their 
+observation sequence number."
+
+### Case
+
+```{r Correlation-proteins_c, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 12, fig.height=8, dev ="svg"}
+
+cors1 <- cor(protein1, method = c( "spearman"), use ="complete.obs")
+hcl1 <- hclust(as.dist(1-abs(cors1)))
+plot(hcl1, xlab ="Proteins", sub ="")
+```
+
+### Control
+
+```{r Correlation-proteins_n, echo=FALSE, message=FALSE, warning=FALSE,fig.width = 12, fig.height=8, dev ="svg"}
+
+cors2 <- cor(protein2, method = c( "spearman"), use ="complete.obs")
+hcl2 <- hclust(as.dist(1-abs(cors2)))
+plot(hcl2, xlab ="Proteins", sub ="")
+```
+
+## Visualization of the correlation matrix
+
+```{r Corr-proteins-ord, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg",out.extra='style="max-width:none; width:100vw; margin-left:calc(50% - 50vw);"'}
+
+ord <- hcl$order
+cors_ord <- cors[ord,ord]
+cors_ord <- round(cors_ord,2)
+corrplot.mixed(cors_ord, upper ="pie", lower="number", tl.pos ="lt",
+ mar = c(0,0,1,0), tl.cex=0.7, main="Correlation matrix plot", number.cex = 0.8,
+ lower.col="black")
+```
+
+`out.extra` option based on (https://stackoverflow.com/questions/67630290/allow-plots-to-overhang-chunk-text-in-rmarkdown-html)
+
+### Case
+
+```{r Corr-proteins-ord_c, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg",out.extra='style="max-width:none; width:100vw; margin-left:calc(50% - 50vw);"'}
+
+cors_ord1 <- cors1[ord,ord]
+cors_ord1 <- round(cors_ord1,2)
+corrplot.mixed(cors_ord1, upper ="pie", lower="number", tl.pos ="lt",
+ mar = c(0,0,1,0), tl.cex=0.7, main="Correlation matrix plot", number.cex = 0.8,
+ lower.col="black")
+```
+
+### Control
+
+```{r Corr-proteins-ord_n, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg",out.extra='style="max-width:none; width:100vw; margin-left:calc(50% - 50vw);"'}
+
+cors_ord2 <- cors2[ord,ord]
+cors_ord2 <- round(cors_ord2,2)
+corrplot.mixed(cors_ord2, upper ="pie", lower="number", tl.pos ="lt",
+ mar = c(0,0,1,0), tl.cex=0.7, main="Correlation matrix plot", number.cex = 0.8,
+ lower.col="black")
+```
+
+```{r scrambled-RDS, echo=FALSE, message=FALSE, warning=FALSE}
+pathRDS <- "./Data/scrambled.rds"
+scrambled <- scrambled %>% mutate(status=CASE_CONTROL, time=FU_TIME)
+saveRDS(scrambled, file = pathRDS)
+```
+
+Note: Data stored in object `scrambled` are saved in `r pathRDS` file.
+
