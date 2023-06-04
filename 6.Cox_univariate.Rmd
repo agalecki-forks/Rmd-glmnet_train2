@@ -1,0 +1,83 @@
+---
+title: '6.Cox_univariate Analysis'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+     lightbox: true
+     use_bookdown: true
+---
+
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+
+```{r pacman, echo=FALSE, message=FALSE, warning=FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolkit 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  corrplot,     #correlation plot
+  survival      # survival analysis    
+  )
+```
+
+# R setup
+
+```{r  rsetup}
+sessionInfo()
+```
+
+# Univariate statistics
+
+
+```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
+xlsx_path = "./Data/data_example.xlsx"
+
+scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
+    filter(BL_eGFR >=45) %>%
+    filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+```
+Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
+Variable names are listed below.
+
+```{r var-names}
+names(scrambled_orig)
+```
+
+```{r, table1, echo=FALSE, message=FALSE, warning=FALSE}
+scrambled2 <- scrambled  %>% 
+          mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
+              Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                    
+          select( "FU_TIME","CASE_CONTROL","BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx" )      
+
+scrambled2$FU_TIME=as.numeric(scrambled2$FU_TIME)
+
+cox_univariate <-
+  tbl_uvregression(
+    scrambled2[c("FU_TIME", "CASE_CONTROL", "BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")],
+    method = coxph,
+    y = Surv(FU_TIME, CASE_CONTROL),
+    exponentiate = TRUE,
+    pvalue_fun = function(x) style_pvalue(x, digits = 2)
+  )
+
+cox_univariate
+```
