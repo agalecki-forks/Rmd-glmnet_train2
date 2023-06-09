@@ -52,7 +52,8 @@ xlsx_path = "./Data/data_example_non_NPX.xlsx"
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
     filter(BL_eGFR >=45) %>%
-    filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+     filter(FU_TIME > 0) 
+    # %>%filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
 ```
 Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
 Variable names are listed below.
