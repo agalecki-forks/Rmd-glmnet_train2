@@ -51,7 +51,7 @@ xlsx_path = "./Data/data_example.xlsx"
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
     filter(BL_eGFR >=45)%>%
-mutate(CASE_CONTROL = if_else(FU_TIME == 10, 0, CASE_CONTROL),
+mutate(CASE_CONTROL = if_else(FU_TIME >= 10, 0, CASE_CONTROL),
        FU_TIME = if_else(FU_TIME > 10, 10, FU_TIME))
        #administrative censoring at 10 years
 ```
@@ -85,7 +85,7 @@ scrambled2_ADMIN %>%
   modify_header(label ~ "**Variable**") %>%
   modify_spanning_header(c("stat_1", "stat_2") ~ "**Status**") %>%
   modify_footnote( all_stat_cols() ~ "Mean (SD), Median (IQR) or Frequency (%)")%>%
-  modify_caption("**Table 1. Follow-up time by using administrative censoring at 10 years**") %>%
+  modify_caption("**Follow-up time by using administrative censoring at 10 years**") %>%
   bold_labels()
 ```
 
