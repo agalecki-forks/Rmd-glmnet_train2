@@ -52,7 +52,7 @@ scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
     filter(BL_eGFR >=45)%>%
 mutate(CASE_CONTROL = if_else(FU_TIME >= 10, 0, CASE_CONTROL),
-       FU_TIME = if_else(FU_TIME > 10, 10, FU_TIME))
+       FU_TIME = if_else(FU_TIME >= 10, 10, FU_TIME))
        #administrative censoring at 10 years
 ```
 Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
