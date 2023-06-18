@@ -49,12 +49,13 @@ sessionInfo()
 xlsx_path = "./Data/data_example.xlsx"
 
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
-scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
+scrambled <- scrambled_orig  %>% mutate(log10_DU_ACR=log10(DU_ACR),eGFR_by_10_mL=BL_eGFR/10) %>%
     filter(BL_eGFR >=45)%>%
     filter(FU_TIME > 0)%>%
 mutate(CASE_CONTROL = if_else(FU_TIME >= 10, 0, CASE_CONTROL),
        FU_TIME = if_else(FU_TIME >= 10, 10, FU_TIME))
        #administrative censoring at 10 years
+       # %>%filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
 ```
 Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
 Variable names are listed below.
@@ -68,10 +69,11 @@ names(scrambled_orig)
 scrambled2 <- scrambled  %>% 
           mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
               Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                    
-          select( "Status","FU_TIME","CASE_CONTROL","BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx" )      
+          select( "Status","FU_TIME","CASE_CONTROL","BL_eGFR","eGFR_by_10_mL","B_HBA1C_PRC","log10_DU_ACR","DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx" )      
 
 scrambled2$FU_TIME=as.numeric(scrambled2$FU_TIME)
 ```
+
 
 # Administrative censoring at 10 years
 ```{r, table2, echo=FALSE, message=FALSE, warning=FALSE}
@@ -95,7 +97,7 @@ scrambled2_ADMIN %>%
 
 cox_univariate <-
   tbl_uvregression(
-    scrambled2[c("FU_TIME", "CASE_CONTROL", "BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")],
+    scrambled2[c("FU_TIME", "CASE_CONTROL", "eGFR_by_10_mL","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")],
     method = coxph,
     y = Surv(FU_TIME, CASE_CONTROL),
     exponentiate = TRUE,
@@ -124,7 +126,71 @@ calculate_concordance <- function(predictor, data) {
 }
 
 # Predictor variables
-predictors <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")
+predictors_var <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")
+
+
+# Calculate concordance for each predictor
+results2 <- sapply(predictors_var, calculate_concordance, data = scrambled2)
+
+# Print the concordance results
+results_df <- data.frame(C_index = results2)
+
+# Print the results data frame
+print(results_df)
+
+```
+
+# Univariate statistics by Quartile- Cox Model
+```{r, table5, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Create a list of predictors
+predictors <- c("BL_eGFR","B_HBA1C_PRC","DU_ACR","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")
+
+# Loop through each predictor
+for (predictor in predictors) {
+  # Create quartile variable name
+  quartile_var <- paste0(predictor, "_quartile")
+  
+  # Calculate quartiles
+  quartiles <- quantile(scrambled2[[predictor]], probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+  
+  # Assign quartile values to the quartile variable
+  scrambled2[[quartile_var]] <- cut(scrambled2[[predictor]], breaks = quartiles, include.lowest = TRUE, labels = c(1, 2, 3, 4))
+}
+
+
+cox_univariate_quartile <-
+  tbl_uvregression(
+    scrambled2[c("FU_TIME", "CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","Gender","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
+    method = coxph,
+    y = Surv(FU_TIME, CASE_CONTROL),
+    exponentiate = TRUE,
+    pvalue_fun = function(x) style_pvalue(x, digits = 2)
+  )
+
+cox_univariate_quartile
+
+
+```
+
+# C-index by Quartile
+```{r, table6, echo=FALSE, message=FALSE, warning=FALSE}
+
+calculate_concordance <- function(predictor, data) {
+  # Build the Cox model formula
+  formula <- as.formula(paste("Surv(FU_TIME, CASE_CONTROL) ~", predictor))
+  
+  # Fit the Cox model
+  fit <- coxph(formula, data = data)
+  
+  # Calculate the concordance
+  res <- concordance(fit, timewt = "n")
+  
+  return(res$concordance)
+}
+
+# Predictor variables
+predictors <- c("BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","Gender","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")
 
 
 # Calculate concordance for each predictor
@@ -135,3 +201,5 @@ results_df <- data.frame(C_index = results2)
 
 # Print the results data frame
 print(results_df)
+
+```
