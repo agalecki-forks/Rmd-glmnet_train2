@@ -145,7 +145,7 @@ print(results_df)
 
 ```
 
-# Univariate statistics by Quartile- Logistic Model
+# Univariate statistics by Categorical Quartile- Logistic Model
 ```{r, table5, echo=FALSE, message=FALSE, warning=FALSE}
 
 # Create a list of predictors
@@ -165,7 +165,7 @@ for (predictor in predictors) {
 
 Logistic_univariate <-
   tbl_uvregression(
-    scrambled2[c("CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","Gender","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
+    scrambled2[c("CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
     method = glm,
     y = CASE_CONTROL,
     method.args = list(family = binomial),
@@ -177,17 +177,11 @@ Logistic_univariate
 ```
 
 
-# C-index by Quartile
+# C-index by Categorical Quartile
 ```{r, table6, echo=FALSE, message=FALSE, warning=FALSE}
 
 # Predictor variables
-predictors <- c("BL_eGFR_quartile", "B_HBA1C_PRC_quartile", "DU_ACR_quartile", "Gender", "AGE_TL_quartile",
-                "TNF.R1.npx_quartile", "TNF.R2.npx_quartile", "LTBR.npx_quartile", "TNFRSF4.npx_quartile",
-                "TNFRSF6B.npx_quartile", "CD27.npx_quartile", "TNFRSF10A.npx_quartile", "RELT.npx_quartile",
-                "EDA2R.npx_quartile", "WFDC2.npx_quartile", "PI3_npx_quartile", "CD160.npx_quartile",
-                "EPHA2.npx_quartile", "EFNA4.npx_quartile", "GFR_alpha_1_npx_quartile", "DLL1.npx_quartile",
-                "LAYN.npx_quartile", "SYND1.npx_quartile", "KIM1.npx_quartile", "PVRL4.npx_quartile",
-                "IL.1RT1.npx_quartile")
+predictors <- c("BL_eGFR_quartile", "B_HBA1C_PRC_quartile", "DU_ACR_quartile", "AGE_TL_quartile","TNF.R1.npx_quartile", "TNF.R2.npx_quartile", "LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile", "CD27.npx_quartile", "TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile", "WFDC2.npx_quartile", "PI3_npx_quartile", "CD160.npx_quartile","EPHA2.npx_quartile", "EFNA4.npx_quartile", "GFR_alpha_1_npx_quartile", "DLL1.npx_quartile","LAYN.npx_quartile", "SYND1.npx_quartile", "KIM1.npx_quartile", "PVRL4.npx_quartile","IL.1RT1.npx_quartile")
 
 # Calculate concordance for each predictor
 results2 <- lapply(predictors, calculate_concordance, data = scrambled2)
@@ -197,4 +191,48 @@ results_df2 <- do.call(rbind, results2)
 
 # Print the results data frame
 print(results_df2)
+```
+
+
+# Univariate statistics by Numerical Quartile- Logistic Model
+```{r, table7, echo=FALSE, message=FALSE, warning=FALSE}
+
+#recode factor variables to numerical variables
+recoded_vars <- c("BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")
+
+for (var in recoded_vars) {
+  scrambled2[[var]] <- as.numeric(as.character(scrambled2[[var]]))
+}
+
+Logistic_univariate <-
+  tbl_uvregression(
+    scrambled2[c("CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
+    method = glm,
+    y = CASE_CONTROL,
+    method.args = list(family = binomial),
+    exponentiate = TRUE
+  )
+
+Logistic_univariate
+
+```
+
+
+# C-index by Numerical Quartile
+```{r, table8, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Predictor variables
+predictors <- c("BL_eGFR_quartile", "B_HBA1C_PRC_quartile", "DU_ACR_quartile", "AGE_TL_quartile",
+                "TNF.R1.npx_quartile", "TNF.R2.npx_quartile", "LTBR.npx_quartile", "TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile", "CD27.npx_quartile", "TNFRSF10A.npx_quartile", "RELT.npx_quartile","EDA2R.npx_quartile", "WFDC2.npx_quartile", "PI3_npx_quartile", "CD160.npx_quartile",
+"EPHA2.npx_quartile", "EFNA4.npx_quartile", "GFR_alpha_1_npx_quartile", "DLL1.npx_quartile","LAYN.npx_quartile", "SYND1.npx_quartile", "KIM1.npx_quartile", "PVRL4.npx_quartile",
+ "IL.1RT1.npx_quartile")
+
+# Calculate concordance for each predictor
+results3 <- lapply(predictors, calculate_concordance, data = scrambled2)
+
+# Combine the results into a single data frame
+results_df3 <- do.call(rbind, results3)
+
+# Print the results data frame
+print(results_df3)
 ```
