@@ -47,12 +47,13 @@ sessionInfo()
 
 
 ```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
-xlsx_path = "./Data/data_example.xlsx"
+xlsx_path = "./Data/data_example_non_NPX.xlsx"
 
 scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
 scrambled <- scrambled_orig  %>% mutate(log10_B_HBA1C_PRC=log10(B_HBA1C_PRC),log10_DU_ACR=log10(DU_ACR)) %>%
     filter(BL_eGFR >=45) %>%
-    filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+     filter(FU_TIME > 0) 
+    # %>%filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
 ```
 Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
 Variable names are listed below.
@@ -68,11 +69,11 @@ scrambled2 <- scrambled  %>%
           select(-INDEX,-SEX,-CASE_CONTROL) %>%
           select("Gender","Status","Death" , "FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , 
                  "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", 
-                 "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx",
-                 "WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", 
-                 "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , 
-                 "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , 
-                 "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx")      
+                 "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1",
+                 "WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", 
+                 "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , 
+                 "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , 
+                 "CD160","EPHA2","RELT","LTBR")      
 
 scrambled2$FU_TIME_Death=as.numeric(scrambled2$FU_TIME_Death)
 
@@ -92,7 +93,7 @@ scrambled2 %>%
 # Histograms
 
 ```{r, histogram, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
-var_num <- scrambled  %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
+var_num <- scrambled  %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
 
 var_num %>%
   keep(is.numeric) %>% 
@@ -106,7 +107,7 @@ var_num %>%
 ## Case
 
 ```{r, histogram_case, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
-Case <- scrambled %>% filter (CASE_CONTROL==1) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
+Case <- scrambled %>% filter (CASE_CONTROL==1) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
 
 Case %>%
   keep(is.numeric) %>% 
@@ -120,7 +121,7 @@ Case %>%
 ## Control
 
 ```{r, histogram_control, echo=FALSE, message=FALSE, warning=FALSE, fig.width = 12, fig.height=8, dev ="svg"}
-Control <- scrambled %>% filter (CASE_CONTROL==0) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1.npx" ,"SYND1.npx","IL.1RT1.npx","WFDC2.npx",      "CD27.npx" , "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx" ,"TNFRSF4.npx" ,"GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,"DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx","LTBR.npx") 
+Control <- scrambled %>% filter (CASE_CONTROL==0) %>% select("FU_TIME" ,"FU_TIME_Death","SBP_TL","DBP_TL" , "AGEONSET_TL" , "BMI_TL","AGE_TL" , "B_HBA1C_PRC","log10_B_HBA1C_PRC", "DU_ACR","log10_DU_ACR","BL_eGFR","KIM1" ,"SYND1","IL.1RT1","WFDC2",      "CD27" , "TNFRSF10A","LAYN","PVRL4", "EDA2R" ,"TNFRSF4" ,"GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,"DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT","LTBR") 
 
 Control %>%
   keep(is.numeric) %>% 
@@ -136,11 +137,11 @@ Control %>%
 ## Spearman's Correlation Matrix
 
 ```{r proteins-vec, include=FALSE}
-proteins <- c("KIM1.npx",      "SYND1.npx", "IL.1RT1.npx","WFDC2.npx", "CD27.npx",
-              "TNFRSF10A.npx", "LAYN.npx",  "PVRL4.npx",  "EDA2R.npx" ,"TNFRSF4.npx" ,
-              "GFR_alpha_1_npx", "TNF.R1.npx", "PI3_npx" , "EFNA4.npx","TNF.R2.npx" ,
-              "DLL1.npx" ,"TNFRSF6B.npx" , "CD160.npx","EPHA2.npx","RELT.npx",
-              "LTBR.npx") 
+proteins <- c("KIM1",      "SYND1", "IL.1RT1","WFDC2", "CD27",
+              "TNFRSF10A", "LAYN",  "PVRL4",  "EDA2R" ,"TNFRSF4" ,
+              "GFR_alpha_1_npx", "TNF.R1", "PI3_npx" , "EFNA4","TNF.R2" ,
+              "DLL1" ,"TNFRSF6B" , "CD160","EPHA2","RELT",
+              "LTBR") 
 ```
 
 Spearman-correlation coefficients are estimated for the following proteins:

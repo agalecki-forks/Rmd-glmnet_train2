@@ -1,0 +1,238 @@
+---
+title: '7.Logistic Univariate Analysis'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+     lightbox: true
+     use_bookdown: true
+---
+
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+
+```{r pacman, echo=FALSE, message=FALSE, warning=FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolkit 
+  tidyr,        # Tools to help to create tidy data
+  ggplot2,      # Plot the results
+  corrplot,     # correlation plot
+  survival,     # survival analysis,    
+  pROC          # ROC for c-statistics
+  )
+```
+
+# R setup
+
+```{r  rsetup}
+sessionInfo()
+```
+
+
+```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
+xlsx_path = "./Data/data_example.xlsx"
+
+scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+scrambled <- scrambled_orig  %>% mutate(log10_DU_ACR=log10(DU_ACR),eGFR_by_10_mL=BL_eGFR/10) %>%
+    filter(BL_eGFR >=45)%>%
+    filter(FU_TIME > 0)
+# mutate(CASE_CONTROL = if_else(FU_TIME >= 10, 0, CASE_CONTROL),
+#        FU_TIME = if_else(FU_TIME >= 10, 10, FU_TIME))
+       #administrative censoring at 10 years
+       # %>%filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+```
+Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
+Variable names are listed below.
+
+```{r var-names}
+names(scrambled_orig)
+```
+
+
+```{r, table1, echo=FALSE, message=FALSE, warning=FALSE}
+scrambled2 <- scrambled  %>% 
+          mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
+              Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                    
+          select( "Status","FU_TIME","CASE_CONTROL","BL_eGFR","eGFR_by_10_mL","B_HBA1C_PRC","log10_DU_ACR","DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx" )      
+
+scrambled2$FU_TIME=as.numeric(scrambled2$FU_TIME)
+```
+
+
+# Follo-up time for a case-control study
+```{r, table2, echo=FALSE, message=FALSE, warning=FALSE}
+
+scrambled2_ADMIN <- scrambled2  %>% select(Status,FU_TIME)
+
+scrambled2_ADMIN %>%
+  tbl_summary(by = Status, missing_text = "(Missing N)",   label = list(FU_TIME ~ "Follow-up Time (year)"), type = all_continuous() ~ "continuous2", statistic = list(all_continuous() ~ c("{mean}, {sd}","{median} ({p25}, {p75})", "{min}, {max}"),all_categorical() ~ "{n} ({p}%)"))  %>%
+  add_p(pvalue_fun = ~style_pvalue(.x, digits = 2)) %>%
+  add_overall() %>%
+  add_n() %>%
+  modify_header(label ~ "**Variable**") %>%
+  modify_spanning_header(c("stat_1", "stat_2") ~ "**Status**") %>%
+  modify_footnote( all_stat_cols() ~ "Mean (SD), Median (IQR) or Frequency (%)")%>%
+  modify_caption("**Follow-up time by using administrative censoring at 10 years**") %>%
+  bold_labels()
+```
+
+# Univariate statistics - Logistic Model
+```{r, table3, echo=FALSE, message=FALSE, warning=FALSE}
+
+Logistic_univariate <-
+  tbl_uvregression(
+        scrambled2[c("CASE_CONTROL", "eGFR_by_10_mL","B_HBA1C_PRC","log10_DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")],
+    method = glm,
+    y = CASE_CONTROL,
+    method.args = list(family = binomial),
+    exponentiate = TRUE
+  )
+
+Logistic_univariate
+
+
+```
+
+# C-index
+```{r, table4, echo=FALSE, message=FALSE, warning=FALSE}
+
+calculate_concordance <- function(predictor, data) {
+  # Build the logistic regression model formula
+  formula <- as.formula(paste("CASE_CONTROL ~", predictor))
+  
+  # Fit the logistic regression model
+  fit <- glm(formula, data = data, family = binomial)
+  
+  # Calculate the concordance
+  res <- concordance(fit)
+  
+  # Create a data frame with the predictor name, C-index, and C-index SE
+  result_df <- data.frame(Predictor = predictor,
+                          C_index = res$concordance,
+                          C_index_se = sqrt(res$var))
+  
+  return(result_df)
+}
+
+# Predictor variables
+predictors_var <- c("eGFR_by_10_mL", "B_HBA1C_PRC", "log10_DU_ACR", "Gender", "AGE_TL", "TNF.R1.npx", "TNF.R2.npx", "LTBR.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "CD27.npx", "TNFRSF10A.npx", "RELT.npx", "EDA2R.npx", "WFDC2.npx", "PI3_npx", "CD160.npx", "EPHA2.npx", "EFNA4.npx", "GFR_alpha_1_npx", "DLL1.npx", "LAYN.npx", "SYND1.npx", "KIM1.npx", "PVRL4.npx", "IL.1RT1.npx")
+
+# Calculate concordance for each predictor
+results <- lapply(predictors_var, calculate_concordance, data = scrambled2)
+
+# Combine the results into a single data frame
+results_df <- do.call(rbind, results)
+
+# Print the results data frame
+print(results_df)
+
+```
+
+# Univariate statistics by Categorical Quartile- Logistic Model
+```{r, table5, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Create a list of predictors
+predictors <- c("BL_eGFR","B_HBA1C_PRC","DU_ACR","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx")
+
+# Loop through each predictor
+for (predictor in predictors) {
+  # Create quartile variable name
+  quartile_var <- paste0(predictor, "_quartile")
+  
+  # Calculate quartiles
+  quartiles <- quantile(scrambled2[[predictor]], probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+  
+  # Assign quartile values to the quartile variable
+  scrambled2[[quartile_var]] <- cut(scrambled2[[predictor]], breaks = quartiles, include.lowest = TRUE, labels = c(1, 2, 3, 4))
+}
+
+Logistic_univariate <-
+  tbl_uvregression(
+    scrambled2[c("CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
+    method = glm,
+    y = CASE_CONTROL,
+    method.args = list(family = binomial),
+    exponentiate = TRUE
+  )
+
+Logistic_univariate
+
+```
+
+
+# C-index by Categorical Quartile
+```{r, table6, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Predictor variables
+predictors <- c("BL_eGFR_quartile", "B_HBA1C_PRC_quartile", "DU_ACR_quartile", "AGE_TL_quartile","TNF.R1.npx_quartile", "TNF.R2.npx_quartile", "LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile", "CD27.npx_quartile", "TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile", "WFDC2.npx_quartile", "PI3_npx_quartile", "CD160.npx_quartile","EPHA2.npx_quartile", "EFNA4.npx_quartile", "GFR_alpha_1_npx_quartile", "DLL1.npx_quartile","LAYN.npx_quartile", "SYND1.npx_quartile", "KIM1.npx_quartile", "PVRL4.npx_quartile","IL.1RT1.npx_quartile")
+
+# Calculate concordance for each predictor
+results2 <- lapply(predictors, calculate_concordance, data = scrambled2)
+
+# Combine the results into a single data frame
+results_df2 <- do.call(rbind, results2)
+
+# Print the results data frame
+print(results_df2)
+```
+
+
+# Univariate statistics by Numerical Quartile- Logistic Model
+```{r, table7, echo=FALSE, message=FALSE, warning=FALSE}
+
+#recode factor variables to numerical variables
+recoded_vars <- c("BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")
+
+for (var in recoded_vars) {
+  scrambled2[[var]] <- as.numeric(as.character(scrambled2[[var]]))
+}
+
+Logistic_univariate <-
+  tbl_uvregression(
+    scrambled2[c("CASE_CONTROL", "BL_eGFR_quartile","B_HBA1C_PRC_quartile","DU_ACR_quartile","AGE_TL_quartile","TNF.R1.npx_quartile","TNF.R2.npx_quartile","LTBR.npx_quartile","TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile","CD27.npx_quartile","TNFRSF10A.npx_quartile","RELT.npx_quartile","EDA2R.npx_quartile","WFDC2.npx_quartile", "PI3_npx_quartile","CD160.npx_quartile","EPHA2.npx_quartile","EFNA4.npx_quartile","GFR_alpha_1_npx_quartile","DLL1.npx_quartile","LAYN.npx_quartile","SYND1.npx_quartile","KIM1.npx_quartile","PVRL4.npx_quartile","IL.1RT1.npx_quartile")],
+    method = glm,
+    y = CASE_CONTROL,
+    method.args = list(family = binomial),
+    exponentiate = TRUE
+  )
+
+Logistic_univariate
+
+```
+
+
+# C-index by Numerical Quartile
+```{r, table8, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Predictor variables
+predictors <- c("BL_eGFR_quartile", "B_HBA1C_PRC_quartile", "DU_ACR_quartile", "AGE_TL_quartile",
+                "TNF.R1.npx_quartile", "TNF.R2.npx_quartile", "LTBR.npx_quartile", "TNFRSF4.npx_quartile","TNFRSF6B.npx_quartile", "CD27.npx_quartile", "TNFRSF10A.npx_quartile", "RELT.npx_quartile","EDA2R.npx_quartile", "WFDC2.npx_quartile", "PI3_npx_quartile", "CD160.npx_quartile",
+"EPHA2.npx_quartile", "EFNA4.npx_quartile", "GFR_alpha_1_npx_quartile", "DLL1.npx_quartile","LAYN.npx_quartile", "SYND1.npx_quartile", "KIM1.npx_quartile", "PVRL4.npx_quartile",
+ "IL.1RT1.npx_quartile")
+
+# Calculate concordance for each predictor
+results3 <- lapply(predictors, calculate_concordance, data = scrambled2)
+
+# Combine the results into a single data frame
+results_df3 <- do.call(rbind, results3)
+
+# Print the results data frame
+print(results_df3)
+```
