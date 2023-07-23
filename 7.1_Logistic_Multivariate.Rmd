@@ -1,0 +1,124 @@
+---
+title: '7.1 Multivariate Logistic Regression Analysis'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+     lightbox: true
+     use_bookdown: true
+---
+
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+
+```{r pacman, echo=FALSE, message=FALSE, warning=FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolkit 
+  tidyr,        # Tools to help to create tidy data
+  ggplot2,      # Plot the results
+  corrplot,     # correlation plot
+  survival,     # survival analysis,    
+  pROC,         # ROC for c-statistics
+  pscl          # Pseudo R2 
+  )
+```
+
+# R setup
+
+```{r  rsetup}
+sessionInfo()
+```
+
+
+```{r, data-read, echo=FALSE, message=FALSE, warning=FALSE}
+xlsx_path = "./Data/data_example.xlsx"
+
+scrambled_orig=readxl::read_excel(xlsx_path, na = "", guess_max = 1000)
+scrambled <- scrambled_orig  %>% mutate(log10_DU_ACR=log10(DU_ACR),eGFR_by_10_mL=BL_eGFR/10) %>%
+    filter(BL_eGFR >=45)%>%
+    filter(FU_TIME > 0)
+# mutate(CASE_CONTROL = if_else(FU_TIME >= 10, 0, CASE_CONTROL),
+#        FU_TIME = if_else(FU_TIME >= 10, 10, FU_TIME))
+       #administrative censoring at 10 years
+       # %>%filter(CASE_CONTROL==1 | (CASE_CONTROL==0 & FU_TIME>=5))
+```
+Raw data stored in `r xlsx_path` file contain `r nrow(scrambled_orig)` rows.  
+Variable names are listed below.
+
+```{r var-names}
+names(scrambled_orig)
+```
+
+
+```{r, table1, echo=FALSE, message=FALSE, warning=FALSE}
+scrambled2 <- scrambled  %>% 
+          mutate(Gender=case_when(SEX==1 ~"Male",SEX==2 ~"Female"),
+              Status=case_when(CASE_CONTROL==1 ~"Case",CASE_CONTROL==0 ~"Control"))%>%                    
+          select( "Status","FU_TIME","CASE_CONTROL","BL_eGFR","eGFR_by_10_mL","B_HBA1C_PRC","log10_DU_ACR","DU_ACR","Gender","AGE_TL","TNF.R1.npx","TNF.R2.npx","LTBR.npx","TNFRSF4.npx","TNFRSF6B.npx","CD27.npx","TNFRSF10A.npx","RELT.npx","EDA2R.npx","WFDC2.npx", "PI3_npx","CD160.npx","EPHA2.npx","EFNA4.npx","GFR_alpha_1_npx","DLL1.npx","LAYN.npx","SYND1.npx","KIM1.npx","PVRL4.npx","IL.1RT1.npx" )      
+
+scrambled2$FU_TIME=as.numeric(scrambled2$FU_TIME)
+```
+
+
+# Multivariate Logistic Regression Model
+```{r, table2, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Create the formula for logistic regression
+
+fit <- glm(CASE_CONTROL ~ BL_eGFR + B_HBA1C_PRC + log10_DU_ACR + KIM1.npx + EDA2R.npx + TNFRSF6B.npx, data = scrambled2, family = binomial)
+
+summary(fit)
+
+res <- concordance(fit)
+
+```
+
+# C-index and SE
+
+C-index
+```{r, table3, echo=FALSE, message=FALSE, warning=FALSE}
+
+## C_index
+res$concordance
+
+```
+
+ C-index SE
+```{r, table4, echo=FALSE, message=FALSE, warning=FALSE}
+
+## C_index_se  
+sqrt(res$var)
+
+```
+
+# Pseudo McFadden’s R-squared
+
+McFadden’s R2
+```{r, table5, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Use the pR2 function to obtain the pseudo-R squared values
+pseudo_r2 <- pR2(fit)
+
+# Extract McFadden's pseudo-R squared value
+
+pseudo_r2["McFadden"]
+
+```
+
