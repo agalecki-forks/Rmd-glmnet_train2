@@ -1,0 +1,113 @@
+---
+title: 'Cox Models for multiple alpha'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+params:
+   ei: 4 
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+ei <- params$ei #
+print(ei)
+
+```
+
+# Covariate # `r ei` :=  `r xvars[ei]` removed 
+
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
+```
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as requested.
+
+
+```{r utilsag-lodaed}
+library(utilsag)
+```
+
+
+```{r datain-info}
+excel_datain  # Path to Excel input raw dataset
+prot_npx 
+clin_vars
+surv_vars
+dim(x)
+tibble(foldid = foldid) %>% group_by(foldid) %>% count()
+
+```
+
+<!-- glmnet object -->
+
+
+# glmnet object
+
+
+```{r glmnet-object}
+ei
+xvars[ei]
+ncolx <- length(colnames(x))
+pen <- rep(1, times= ncolx)
+pen[1:3] <- 0
+
+
+fit <- glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen, exclude = ei)
+(gl_fit <- myglance(fit))
+(td_fit <- mytidy(fit))
+plot(fit)
+
+betai <- td_fit %>% unnest(beta) %>% group_by(step) 
+betai$excluded <- xvars[ei]
+betai
+```
+
+# `cv.glmnet` 
+
+```{r cv-glmnet}
+cvfit <- cv.glmnet(x, ySurv, family = "cox", alpha=1,foldid = foldid, penalty.factor = pen, exclude =ei)
+
+(gl_cvfit <- myglance(cvfit))
+idx_min <- gl_cvfit %>% pull(index_min)
+idx_1se <- gl_cvfit %>% pull(index_1se)
+
+td_cvfit <- mytidy(cvfit)
+td_cvfit$log_lmbda <- log(td_cvfit$lambda)
+td_cvfit$excluded <- xvars[ei]
+td_cvfit$idx <- "."
+td_cvfit[idx_min, "idx"] <- "min"
+td_cvfit[idx_1se, "idx"] <- "1se"
+idx_min
+td_cvfit %>% print(n = idx_min)
+plot(cvfit)
+
+coefMtx <- coef(fit)
+coef_selected <- coefMtx[ , idx_1se:idx_min]
+nms <- paste0("idx_", idx_1se:idx_min)
+colnames(coef_selected) <- nms
+coef_selected[, 1:7]
+plot(fit, xvar = "lambda", label = TRUE)
+```
+
+```{r  ggplot-coefs}
+dfg <- td_fit %>% unnest(beta) %>% group_by(step) 
+
+ggplot(dfg , aes(x = log(lambda), y = estimate)) +
+       geom_line(aes(color = term)) + ylab("Coefficients")
+
+```
+
+
+```{r test-output}
+cvfiti  <- cvfit
+resi   <- ei
+rm(ei, cvfit)
+```
