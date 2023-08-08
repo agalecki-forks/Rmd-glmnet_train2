@@ -1,7 +1,7 @@
 # source("15.Cox-multiple-run.R")
 # Clears Global environment
  rm(list=ls())
- Rdata_out <- "15.test.Rdata"
+ Rdata_out <- "./out/15out/15-cox-multiple.Rdata"
 
  
  # Auxiliary functions
@@ -37,11 +37,12 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    idx_1se <- mygl[, "index_1se"] %>% pull()
    
    cvtd <- mytidy(cvfit) 
-   print(cvtd)
-   mincv <- rep(".", nlmbda)
-   mincv[idx_min] <- "min"
-   mincv[idx_1se] <- "1se"
-   print(length(mincv))
+   # print(cvtd)
+   mincv <- rep("-", nlmbda)
+   mincv[idx_1se:idx_min] <- "+"
+   mincv[idx_min] <- "min>"
+   mincv[idx_1se] <- "<1se"
+   # print(length(mincv))
    cvtd$mincv <- mincv
    
    fit <- cvfit$glmnet.fit
@@ -53,7 +54,7 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    td_fit$Cindex <- C_index
    bind_cols(cvtd, td_fit, info_tbl)
 }
-# mytidy_Surv(fit0, x, ySurv)
+# mytidy_Surv(cvfit0, x, ySurv)
 
 
  
@@ -94,22 +95,26 @@ save(session_Info, file = Rdata_out)
 bnm <- "15.Cox-multiple"   # Basename of Rmd file (do not change it)
 bnm_init <- paste0(bnm, "-init.Rmd")
 rmarkdown::render(bnm_init, "all")
+# save objects : cvfit1, td_cvfit1 
+# save tibbles: td_cv1, beta1
 
 # --- Loop over columns of x matrix
 
 istart  <- length(clin_vars)+ 1
 iend    <- length(clin_vars) + length(prot_npx)
-iend    <- length(clin_vars) +2  # !!! atg for testing 
-len <- iend - istart + 1
+# iend    <- length(clin_vars) +2  # !!! atg for testing 
+loopii <- istart:iend
+## loopii <- c(9, 23) # !! atg for testing
+len <- length(loopii)
 
-all_cvfit  <- vector("list", length =len )
-all_betas  <- vector("list", length =len )   # multiple rows
-all_res    <- vector("list", length =len )   # one row
+all_cvfit  <- vector("list", length    = len )
+all_betas  <- vector("list", length    = len )      # multiple rows
+all_cvtidy    <- vector("list", length = len )   
+all_cvtd      <- vector("list", length = len )   
 
 
-
-
-for (ii in istart:iend){
+for (ix in 1:len){
+ ii <- loopii[ix]
  ## ac <- gsub("[.]", "_", paste0("-", a)) # . -> _
  message ("--- Rmd for covariate= ", xvars[ii], " processed")
  paramsi <- list(ei = ii)   # index of covarite excluded
@@ -117,11 +122,33 @@ for (ii in istart:iend){
  knitr::purl(nmsj["nmRmd"], output = nmsj["nmR"])
  rmarkdown::render(nmsj["nmRmd"], "all", output_file = nmsj["nm_out"], params = paramsi)
  # print(cvfiti)
- all_cvfit[[ii]]  <- cvfiti
- all_betas[[ii]]  <- betai    
- all_res[[ii]]    <- resi
+ # save objects : cvfit, td_cvfit 
+ # save tibbles: td_cv, betai
+
+ #-  cvfit, td_cvfit, betai
+ all_cvfit[[ix]]  <- cvfit
+ all_betas[[ix]]  <- betai   
+ all_cvtidy[[ix]]  <- td_cvfit
+ all_cvtd[[ix]]   <- td_cv
+
 }
 
-x_nms <- paste("x_", 1:len)
-names(all_cvfit) <- x_nms
-save(session_Info, all_cvfit, all_betas, all_res, file = Rdata_out)
+x_nms0 <- paste("x", loopii,"_", colnames(x)[loopii],sep ="")
+x_nms  <- c("ALLx", x_nms0) 
+res_cvfit <- append(all_cvfit,  list(cvfit1),    after = 0)
+res_betas <- append(all_betas,  list(beta1),     after = 0)
+res_cvtidy <-append(all_cvtidy, list(td_cvfit1), after = 0)
+res_cvtd   <-append(all_cvtd,   list(td_cv1),    after = 0) # Not saved
+
+names(res_cvfit) <- x_nms
+names(res_betas) <- x_nms
+names(res_cvtidy) <- x_nms
+names(res_cvtd) <- x_nms
+save(session_Info, res_cvfit, res_betas, res_cvtidy, file = Rdata_out)
+
+#-- Create xlsx
+
+xlsx_path <- paste0("./out/15out/res_betas.xlsx")
+write_xlsx(res_betas, xlsx_path)
+xlsx_path <- paste0("./out/15out/res_cvtidy.xlsx")
+write_xlsx(res_cvtidy, xlsx_path)

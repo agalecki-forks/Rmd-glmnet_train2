@@ -1,5 +1,5 @@
 ---
-title: 'Cox Models for multiple alpha'
+title: 'Multiple Cox Models'
 author: "Chunyi Wu and Andrzej Galecki"
 date: "`r format(Sys.Date())`"
 output:
@@ -18,22 +18,9 @@ print(ei)
 
 ```
 
-# Covariate # `r ei` :=  `r xvars[ei]` removed 
+# LASSO (- `r ei` :=  `r xvars[ei]`)
 
-```{r utilsag-version-2test, include = FALSE}
-uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
-```
-
-```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
-```
-
-This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
-as requested.
-
-
-```{r utilsag-lodaed}
-library(utilsag)
-```
+Covariate # `r ei` :=  `r xvars[ei]` removed 
 
 
 ```{r datain-info}
@@ -49,7 +36,7 @@ tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 <!-- glmnet object -->
 
 
-# glmnet object
+## glmnet 
 
 
 ```{r glmnet-object}
@@ -57,44 +44,13 @@ ei
 xvars[ei]
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx)
-pen[1:3] <- 0
+pen[1:length(clin_vars)] <- 0
 
 
 fit <- glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen, exclude = ei)
 (gl_fit <- myglance(fit))
 (td_fit <- mytidy(fit))
 plot(fit)
-
-betai <- td_fit %>% unnest(beta) %>% group_by(step) 
-betai$excluded <- xvars[ei]
-betai
-```
-
-# `cv.glmnet` 
-
-```{r cv-glmnet}
-cvfit <- cv.glmnet(x, ySurv, family = "cox", alpha=1,foldid = foldid, penalty.factor = pen, exclude =ei)
-
-(gl_cvfit <- myglance(cvfit))
-idx_min <- gl_cvfit %>% pull(index_min)
-idx_1se <- gl_cvfit %>% pull(index_1se)
-
-td_cvfit <- mytidy(cvfit)
-td_cvfit$log_lmbda <- log(td_cvfit$lambda)
-td_cvfit$excluded <- xvars[ei]
-td_cvfit$idx <- "."
-td_cvfit[idx_min, "idx"] <- "min"
-td_cvfit[idx_1se, "idx"] <- "1se"
-idx_min
-td_cvfit %>% print(n = idx_min)
-plot(cvfit)
-
-coefMtx <- coef(fit)
-coef_selected <- coefMtx[ , idx_1se:idx_min]
-nms <- paste0("idx_", idx_1se:idx_min)
-colnames(coef_selected) <- nms
-coef_selected[, 1:7]
-plot(fit, xvar = "lambda", label = TRUE)
 ```
 
 ```{r  ggplot-coefs}
@@ -102,12 +58,113 @@ dfg <- td_fit %>% unnest(beta) %>% group_by(step)
 
 ggplot(dfg , aes(x = log(lambda), y = estimate)) +
        geom_line(aes(color = term)) + ylab("Coefficients")
+```
 
+## cv.glmnet 
+
+```{r cv-glmnet}
+cvfit <- cv.glmnet(x, ySurv, family = "cox", alpha=1, foldid = foldid, penalty.factor = pen, exclude =ei)
+cvfit
+# mytidy(cvfit)
+(mygl <- myglance(cvfit))
+lmbda <- mygl[,c("lambda.min", "lambda.1se")] %>% 
+           mutate(log_lmin = log(lambda.min), log_l1se = log(lambda.1se))
+lmbda
+
+## cv.plot
+#mytidy(cvfit)
+plot(cvfit)
+```
+
+## c-v partial likelihood dev
+
+* cross-validated  partial likelihood deviance
+
+
+
+```{r td-cvfit1}
+td_cvfit <- mytidy_Surv(cvfit, x, ySurv)
+td_cvfit$comment <- paste0(xvars[ei], " removed") 
+td_cv <-td_cvfit  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
+td_cv %>% filter(mincv != "-") %>% print(n = 500)
+```
+## beta coefficients
+
+```{r betai}
+betai <- td_cvfit %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
+           unnest(beta) %>% group_by(step)
+nrow(betai)
+betai %>% filter(mincv != "-") %>% print(n=400)
 ```
 
 
-```{r test-output}
-cvfiti  <- cvfit
-resi   <- ei
-rm(ei, cvfit)
+```{r coef-beta}
+bx <- betai %>% select(term, estimate, mincv)
+bx %>% filter(mincv == "1se" | mincv == "min" | mincv == "+")
 ```
+
+
+## Coefficients path
+
+* Plot using glmnet fit object
+
+```{r beta-path}
+plot(fit, xvar = "lambda", label = TRUE)
+```
+
+
+* Template for coefficients.
+* Rows correspond to (descending) sequence of lambda hyperparameters
+* Columns correspond to predictors
+
+```{r tcoefs1}
+coefs <- coef(fit)
+ncoefs <- nrow(coefs)
+snms <- colnames(coefs)
+idx_1se <- mygl %>% select(index_1se) %>% pull()
+idx_min <- mygl %>% select(index_min) %>% pull()
+
+snms[idx_1se] <- paste0("<" ,snms[idx_1se])
+snms[idx_min] <- paste0(snms[idx_min], ">")
+
+tx <- t(coefs)
+ttx <- t(tx)
+tx0 <- t(ttx != 0)
+idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
+idxr <- rank(idx)
+tmp <- idxr[c(idx_1se, idx_min)] 
+idxr[c(idx_1se, idx_min)] <- tmp +0.01
+sel <- which(!duplicated(idxr))
+res <- tx0[sel,]
+rownames(res) <- snms[sel]
+```
+
+```{r tcoefs2}
+cnms <- 1:ncoefs
+tmp <- paste0( ei, "*")
+cnms[ei] <- tmp 
+colnames(res) <- cnms
+```
+* Predictors 
+
+```{r tcoefs3}
+rownames(coefs)
+print(res, col.names = TRUE)
+```
+
+* Beta coefficients path
+
+```{r selected-betas}
+len.max <- 7
+whch_1se <- which(sel == idx_1se)
+whch_min <- which(sel == idx_min)
+selx <- sel[whch_1se:whch_min]
+selxx <- selx
+if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])
+c(idx_1se, idx_min)
+
+resx <- coefs[, selxx]
+round(resx,4)
+```
+
+

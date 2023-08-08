@@ -13,6 +13,22 @@ output:
 knitr::opts_chunk$set(echo = TRUE, comment="#>")
 ```
 
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
+```
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as requested.
+
+
+```{r utilsag-lodaed}
+library(utilsag)
+```
+
+
 
 <!-- ========== Read raw data   ================= -->
 
@@ -148,6 +164,8 @@ tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 
 ## glmnet
 
+* All predictors included 
+
 ```{r beta1}
 clin_vars
 ncolx <- length(colnames(x))
@@ -155,29 +173,132 @@ pen <- rep(1, times= ncolx)
 pen[1:length(clin_vars)] <- 0
 fit1 <- glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen)
 (gl_fit1 <- myglance(fit1))
+(td_fit1 <- mytidy(fit1))
 
 plot(fit1)
+## plot(fit1, xvar = "lambda", label = TRUE)
+
 ```
-# cv.glmnet
+
+```{r  ggplot1-coefs}
+dfg1 <- td_fit1 %>% unnest(beta) %>% group_by(step) 
+
+ggplot(dfg1 , aes(x = log(lambda), y = estimate)) +
+       geom_line(aes(color = term)) + ylab("Coefficients")
+```
+
+
+## cv.glmnet
 
 ```{r cv-fit1}
 cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen, foldid =foldid)
-cvfit1
+cvfit1 # saved
+
+
 (mygl1 <- myglance(cvfit1))
-log(mygl1[,c("lambda.min", "lambda.1se")]) # log(lambda)
-mytidy(cvfit1)
+lmbda <- mygl1[,c("lambda.min", "lambda.1se")] %>% 
+           mutate(log_lmin = log(lambda.min), log_l1se = log(lambda.1se))
+lmbda
 
-td_cvfit1 <- mytidy_Surv(cvfit1, x, ySurv)
-td_cvfit1$comment <- "LASSO-ALL"
-beta1 <- td_cvfit1 %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% unnest(beta) %>% group_by(step) 
-
-beta1
-
-beta1 %>% filter(mincv == "1se")
-beta1 %>% filter(mincv == "min")
-
-
-
+#mytidy(cvfit1)
 plot(cvfit1)
 ```
+
+## c-v partial likelihood dev
+
+* cross-validated  partial likelihood deviance
+
+
+```{r td-cvfit1}
+td_cvfit1 <- mytidy_Surv(cvfit1, x, ySurv)
+td_cvfit1$comment <- "LASSO-ALL"
+td_cv1 <-td_cvfit1  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
+td_cv1 %>% filter(mincv != "-") %>% print(n = 500)
+
+```
+
+## beta coefficients
+
+```{r beta-coefs}
+beta1 <- td_cvfit1 %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
+                unnest(beta) %>% group_by(step) 
+nrow(beta1)               
+beta1 %>% filter(mincv != "-") %>% print(n=400)
+```
+
+```{r coef-beta}
+bx1 <- beta1 %>% select(term, estimate, mincv)
+bx1 %>% filter(mincv == "1se" | mincv == "min" | mincv == "+")
+```
+
+## Coefficients path
+
+* Plot using glmnet fit object
+
+
+```{r beta-path}
+plot(fit1, xvar = "lambda", label = TRUE)
+```
+
+
+
+* Template for beta coefficients.
+* Rows correspond to (descending) sequence of lambda hyperparameters
+* Columns correspond to covariates
+
+```{r tcoefs1}
+coefs <- coef(fit1)
+ncoefs <- nrow(coefs)
+coef_nms <- rownames(coefs)
+snms <- colnames(coefs)
+idx_1se <- mygl1 %>% select(index_1se) %>% pull()
+idx_min <- mygl1 %>% select(index_min) %>% pull()
+
+snms[idx_1se] <- paste0("<" ,snms[idx_1se])
+snms[idx_min] <- paste0(snms[idx_min], ">")
+
+
+tx <- t(coefs)
+ttx <- t(tx)
+tx0 <- t(ttx != 0)
+idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
+idxr <- rank(idx)
+tmp <- idxr[c(idx_1se, idx_min)]
+idxr[c(idx_1se, idx_min)] <- tmp + 0.01
+sel <- which(!duplicated(idx))
+res <- tx0[sel,]
+rownames(res) <- snms[sel]
+```
+
+```{r tcoefs2}
+cnms <- 1:ncoefs
+colnames(res) <- cnms
+```
+* Predictors 
+
+```{r tcoefs3}
+rownames(coefs)
+print(res, col.names = TRUE)
+```
+
+* Beta coefficients path
+
+```{r selected-betas}
+len.max <- 7
+whch_1se <- which(sel == idx_1se)
+whch_min <- which(sel == idx_min)
+selx <- sel[whch_1se:whch_min]
+selxx <- selx
+if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])
+c(idx_1se, idx_min)
+resx <- coefs[, selxx]
+round(resx,4)
+```
+
+```{r rmo}
+rm(idx_1se, idx_min, tmp, whch_1se, whch_min)
+#rm(coefs,  resx)
+
+```
+
 
