@@ -35,7 +35,7 @@ library(utilsag)
 # Read raw data
 
 ```{r  Read-raw-data}
-excel_datain <- "./Data/data_example.xlsx"
+excel_datain <- "./Data/data_example.xlsx" # Enter dataset name
 dt <- read_excel(excel_datain)
 ```
 
