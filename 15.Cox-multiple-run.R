@@ -2,6 +2,11 @@
 # Clears Global environment
  rm(list=ls())
  Rdata_out <- "./out/15out/15-cox-multiple.Rdata"
+#  Trace
+ for (i in 1:20){
+    nam <- paste0("T.",i)
+    assign(nam, NULL)
+  }
 
  
  # Auxiliary functions
@@ -16,7 +21,10 @@
  
  BICAICglm<- function(fit){
  #-- Based on https://stackoverflow.com/questions/40920051/r-getting-aic-bic-likelihood-from-glmnet
-   #tLL <- fit$null.deviance - deviance(fit)  
+   tmp <- list(fit =fit)
+   assign("T.4", tmp, envir =.GlobalEnv)
+ 
+  #tLL <- fit$null.deviance - deviance(fit)  
    tLL <- -deviance(fit) # 2*log-likelihood
    ## k <- dim(model.matrix(fit))[2]
    k <- fit$df 
@@ -31,6 +39,9 @@
  
 mytidy_Surv <- function(cvfit, xnew, ySurv){
   # cv.glmnet fitfamily = cox
+   tmp <- list(cvfit= cvfit, xnew=xnew, ySurv)
+   assign("T.1", tmp, envir = .GlobalEnv)
+
    mygl <- myglance(cvfit)
    nlmbda <- mygl %>% select(n_lambda) %>% pull()
    idx_min <- mygl[, "index_min"] %>% pull()
@@ -42,12 +53,18 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    mincv[idx_1se:idx_min] <- "+"
    mincv[idx_min] <- "min>"
    mincv[idx_1se] <- "<1se"
+   tmp <- list(mygl= mygl, cvtd = cvtd, idx = c(idx_1se, idx_min), mincv=mincv)
+   assign("T.2", tmp, envir = .GlobalEnv)
+
    # print(length(mincv))
    cvtd$mincv <- mincv
    
    fit <- cvfit$glmnet.fit
    td_fit <- mytidy(fit) %>% select(-c(step, lambda)) # with nested beta
    pred     <- predict(fit, newx = xnew)
+   tmp <- list(pred = pred, fit = fit)
+   assign("T.3", tmp, envir = .GlobalEnv)
+
    C_index  <-  Cindex(pred, ySurv)
    info     <- BICAICglm(fit)
    info_tbl <- as_tibble(info)
