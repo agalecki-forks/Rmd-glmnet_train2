@@ -2,6 +2,11 @@
 # Clears Global environment
  rm(list=ls())
  Rdata_out <- "./out/15out/15-cox-multiple.Rdata"
+#  Trace
+ for (i in 1:20){
+    nam <- paste0("T.",i)
+    assign(nam, NULL)
+  }
 
 # Trace
  for (i in 1:20){
@@ -22,7 +27,12 @@
  #-- Based on https://stackoverflow.com/questions/40920051/r-getting-aic-bic-likelihood-from-glmnet
    tmp <- list(fit =fit)
    assign("T.4", tmp, envir =.GlobalEnv)
+<<<<<<< HEAD
    #tLL <- fit$null.deviance - deviance(fit)  
+=======
+ 
+  #tLL <- fit$null.deviance - deviance(fit)  
+>>>>>>> 0348643408988c9a7c12abd2a9fe800030b0eaa6
    tLL <- -deviance(fit) # 2*log-likelihood
    ## k <- dim(model.matrix(fit))[2]
    k <- fit$df 
@@ -39,6 +49,10 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
   # cv.glmnet fitfamily = cox
    tmp <- list(cvfit= cvfit, xnew=xnew, ySurv)
    assign("T.1", tmp, envir = .GlobalEnv)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0348643408988c9a7c12abd2a9fe800030b0eaa6
    mygl <- myglance(cvfit)
    nlmbda <- mygl %>% select(n_lambda) %>% pull()
    idx_min <- mygl[, "index_min"] %>% pull()
