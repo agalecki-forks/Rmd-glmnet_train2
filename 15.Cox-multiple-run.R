@@ -44,7 +44,7 @@
  
 mytidy_Surv <- function(cvfit, xnew, ySurv){
   # cv.glmnet fitfamily = cox
-   tmp <- list(cvfit= cvfit, xnew=xnew, ySurv)
+   tmp <- list(cvfit= cvfit, xnew=xnew, ySurv= ySurv)
    assign("T.1", tmp, envir = .GlobalEnv)
    mygl <- myglance(cvfit)
    nlmbda <- mygl %>% select(n_lambda) %>% pull()
