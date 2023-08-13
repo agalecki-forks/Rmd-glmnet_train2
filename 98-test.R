@@ -48,11 +48,12 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
  
    td_fit <- mytidy(gfit) %>% select(-c(step, lambda)) # with nested beta
    pred     <- predict(gfit, newx = xnew)
-   tmp <- list(pred = pred, gfit = gfit)
+   tmp <- list(pred = pred, gfit = gfit, Cindex = Cindex)
    assign("T.3", tmp, envir = .GlobalEnv)
+   C_index  <-  Cindex(pred, ySurv)   
+   tmp <- list(C_index = C_index)
+   assign("T.5", tmp, envir = .GlobalEnv)
 
-   C_index  <-  Cindex(pred, ySurv)
- 
    info     <- BICAICglm(gfit)
    info_tbl <- as_tibble(info)
    td_fit$Cindex <- C_index
