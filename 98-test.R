@@ -44,16 +44,16 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    # print(length(mincv))
    cvtd$mincv <- mincv
  
-   fit <- cvfit$glmnet.fit
+   gfit <- cvfit$glmnet.fit
  
-   td_fit <- mytidy(fit) %>% select(-c(step, lambda)) # with nested beta
-   pred     <- predict(fit, newx = xnew)
-   tmp <- list(pred = pred, fit = fit)
+   td_fit <- mytidy(gfit) %>% select(-c(step, lambda)) # with nested beta
+   pred     <- predict(gfit, newx = xnew)
+   tmp <- list(pred = pred, gfit = gfit)
    assign("T.3", tmp, envir = .GlobalEnv)
 
    C_index  <-  Cindex(pred, ySurv)
  
-   info     <- BICAICglm(fit)
+   info     <- BICAICglm(gfit)
    info_tbl <- as_tibble(info)
    td_fit$Cindex <- C_index
    bind_cols(cvtd, td_fit, info_tbl)
