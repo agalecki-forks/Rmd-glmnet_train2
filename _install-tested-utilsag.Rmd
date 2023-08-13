@@ -5,6 +5,7 @@ This script was (successfully) tested using version *`r uag_ver0`* of the `utils
 Information on current installation of `utilsag` package is as follows: 
 
 ```{r utilsag-info, include = FALSE}
+install.packages("penAFT")
 .libPaths()
 uag_path <- system.file(package = "utilsag")
 uag_ver  <- if (uag_path != ""){
