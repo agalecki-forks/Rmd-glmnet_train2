@@ -265,7 +265,8 @@ idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
 idxr <- rank(idx)
 tmp <- idxr[c(idx_1se, idx_min)]
 idxr[c(idx_1se, idx_min)] <- tmp + 0.01
-sel <- which(!duplicated(idx))
+
+sel <- which(!duplicated(idxr)) # idx -> idxr
 res <- tx0[sel,]
 rownames(res) <- snms[sel]
 ```
