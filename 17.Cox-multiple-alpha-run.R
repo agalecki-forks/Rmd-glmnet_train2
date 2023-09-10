@@ -102,16 +102,22 @@ session_Info <- sessionInfo()
 
 save(session_Info, file = Rdata_out)
 
+# Set value of alphax !!!!
+
+alphax <- 1
 
 bnm <- "17.Cox-multiple-alpha"   # Basename of Rmd file (do not change it)
 bnm_init <- paste0(bnm, "-init.Rmd")
-rmarkdown::render(bnm_init, "all")
+out_init <- paste0(bnm, "-init-", alphax)
+parms <- list( alphax = alphax)
+
+rmarkdown::render(bnm_init, "all", params = parms)
 # save objects : cvfit1, td_cvfit1 
 # save tibbles: td_cv1, beta1
 
 # --- Loop over columns of x matrix
 
-istart  <- length(clin_vars)+ 1
+istart  <- length(clin_vars) + 1
 iend    <- length(clin_vars) + length(prot_npx)
 # iend    <- length(clin_vars) +2  # !!! atg for testing 
 loopii <- istart:iend
@@ -128,10 +134,11 @@ for (ix in 1:len){
  ii <- loopii[ix]
  ## ac <- gsub("[.]", "_", paste0("-", a)) # . -> _
  message ("--- Rmd for covariate= ", xvars[ii], " processed")
- paramsi <- list(ei = ii)   # index of covarite excluded
+ paramsi <- list(alphax = alphax, ei = ii)   # index of covariate excluded
  nmsj <- names3_aux(bnm, ii)
  knitr::purl(nmsj["nmRmd"], output = nmsj["nmR"])
- rmarkdown::render(nmsj["nmRmd"], "all", output_file = nmsj["nm_out"], params = paramsi)
+ out_nm <- paste0(nmsj["nm_out"], "-", alphax)
+ rmarkdown::render(nmsj["nmRmd"], "all", output_file = out_nm , params = paramsi)
  # print(cvfiti)
  # save objects : cvfit, td_cvfit 
  # save tibbles: td_cv, betai
@@ -144,7 +151,7 @@ for (ix in 1:len){
 
 }
 
-x_nms0 <- paste("x", loopii,"_", colnames(x)[loopii],sep ="")
+x_nms0 <- paste("x", loopii,"_", colnames(x)[loopii], sep ="")
 x_nms  <- c("ALLx", x_nms0) 
 res_cvfit <- append(all_cvfit,  list(cvfit1),    after = 0)
 res_betas <- append(all_betas,  list(beta1),     after = 0)
@@ -159,7 +166,7 @@ save(session_Info, res_cvfit, res_betas, res_cvtidy, file = Rdata_out)
 
 #-- Create xlsx
 
-xlsx_path <- paste0("./out/17out/res_betas.xlsx")
+xlsx_path <- paste0("./out/17out/res_betas-", alphax, ".xlsx")
 write_xlsx(res_betas, xlsx_path)
-xlsx_path <- paste0("./out/17out/res_cvtidy.xlsx")
+xlsx_path <- paste0("./out/17out/res_cvtidy-", alphax, ".xlsx")
 write_xlsx(res_cvtidy, xlsx_path)

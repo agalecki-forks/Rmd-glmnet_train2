@@ -7,6 +7,7 @@ output:
     lightbox: true
     use_bookdown: true
 params:
+   alphax: -99
    ei: 4 
 ---
 
@@ -16,6 +17,8 @@ knitr::opts_chunk$set(echo = TRUE, comment="#>")
 ei <- params$ei #
 print(ei)
 
+alphax <- params$alphax
+print(alphax)
 ```
 
 # LASSO (- `r ei` :=  `r xvars[ei]`)
@@ -84,7 +87,7 @@ plot(cvfit)
 
 ```{r td-cvfit1}
 td_cvfit <- mytidy_Surv(cvfit, x, ySurv)
-td_cvfit$comment <- paste0(xvars[ei], " removed") 
+td_cvfit$comment <- paste0("a=", alphax,";", ei, ":", xvars[ei], " removed") 
 td_cv <-td_cvfit  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
 td_cv %>% filter(mincv != "-") %>% print(n = 500)
 ```

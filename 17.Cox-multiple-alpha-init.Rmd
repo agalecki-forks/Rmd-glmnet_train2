@@ -6,6 +6,8 @@ output:
   rmdformats::readthedown:
     lightbox: true
     use_bookdown: true
+params:
+   alphax: -99
 ---
 
 
@@ -26,6 +28,10 @@ as requested.
 
 ```{r utilsag-lodaed}
 library(utilsag)
+```
+
+```{r params-read}
+alphax <- params$alphax
 ```
 
 
@@ -191,7 +197,7 @@ ggplot(dfg1 , aes(x = log(lambda), y = estimate)) +
 ## cv.glmnet
 
 ```{r cv-fit1}
-cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen, foldid =foldid)
+cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen, foldid =foldid)
 cvfit1 # saved
 
 
@@ -211,7 +217,7 @@ plot(cvfit1)
 
 ```{r td-cvfit1}
 td_cvfit1 <- mytidy_Surv(cvfit1, x, ySurv)
-td_cvfit1$comment <- "LASSO-ALL"
+td_cvfit1$comment <- paste0("alpha=", alphax)
 td_cv1 <-td_cvfit1  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
 td_cv1 %>% filter(mincv != "-") %>% print(n = 500)
 
