@@ -1,8 +1,7 @@
 # source("17.Cox-multiple-alpha-run.R")
 # Clears Global environment
  rm(list=ls())
- Rdata_out <- "./out/17out/17-cox-multiple-alpha.Rdata"
-
+ 
  # Auxiliary functions
   
  names3_aux <- function(basenm, postfix){ 
@@ -32,7 +31,7 @@
  }
  
 mytidy_Surv <- function(cvfit, xnew, ySurv){
-  # cv.glmnet fitfamily = cox
+  # cv.glmnet fit, family = cox
    tmp <- list(cvfit= cvfit, xnew=xnew, ySurv= ySurv)
    # assign("T.1", tmp, envir = .GlobalEnv)
    mygl <- myglance(cvfit)
@@ -86,34 +85,40 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    gtsummary,    # calculate summary statistics and format the results
    sjPlot,       # correlation matrix
    purrr,        # enhances R functional programming (FP) toolki 
-   tidyr,        #Tools to help to create tidy data
-   ggplot2,      #Plot the results
-   glmnetUtils,  #Glmnet models for multiple alpha
+   tidyr,        # Tools to help to create tidy data
+   ggplot2,      # Plot the results
+   glmnetUtils,  # Glmnet models for multiple alpha
    coefplot,     # Plotting Model Coefficients
-   survival,     #survival model 
-   survivalROC,  #survivalROC
-   writexl       #write excel
+   survival,     # survival model 
+   survivalROC,  # survivalROC
+   writexl       # write excel
    )
 
 # session Info
 session_Info <- sessionInfo()
+alphax_vals <- c(0.5,1)
 
+for (alphai in 1:length(alphax_vals)){
 
+ alphax <- alphax_vals[alphai]
+
+Rdata_out <- paste0("./out/17out/a_", alphax, "/17-cox-multiple-alpha.Rdata")
 
 save(session_Info, file = Rdata_out)
 
 # Set value of alphax !!!!
 
-alphax <- 1
 
+# process -init.Rmd
 bnm <- "17.Cox-multiple-alpha"   # Basename of Rmd file (do not change it)
 bnm_init <- paste0(bnm, "-init.Rmd")
-out_init <- paste0(bnm, "-init-", alphax)
-parms <- list( alphax = alphax)
+out_init <- paste0("./out/17out/a_", alphax,"/", bnm, "-init")
+print(out_init)
+parms <- list(alphax = alphax)
 
-rmarkdown::render(bnm_init, "all", params = parms)
-# save objects : cvfit1, td_cvfit1 
-# save tibbles: td_cv1, beta1
+rmarkdown::render(bnm_init, "all", output_file = out_init, params = parms)
+# saved objects for later use: cvfit1, td_cvfit1 
+# saved tibbles for later use: td_cv1, beta1
 
 # --- Loop over columns of x matrix
 
@@ -133,11 +138,11 @@ all_cvtd      <- vector("list", length = len )
 for (ix in 1:len){
  ii <- loopii[ix]
  ## ac <- gsub("[.]", "_", paste0("-", a)) # . -> _
- message ("--- Rmd for covariate= ", xvars[ii], " processed")
+ message ("--- alphax=", alphax, ", ii=", ii,": Rmd for covariate= ", xvars[ii], " processed")
  paramsi <- list(alphax = alphax, ei = ii)   # index of covariate excluded
  nmsj <- names3_aux(bnm, ii)
  knitr::purl(nmsj["nmRmd"], output = nmsj["nmR"])
- out_nm <- paste0(nmsj["nm_out"], "-", alphax)
+ out_nm <- paste0("./out/17out/a_", alphax,"/html/", bnm, ii)
  rmarkdown::render(nmsj["nmRmd"], "all", output_file = out_nm , params = paramsi)
  # print(cvfiti)
  # save objects : cvfit, td_cvfit 
@@ -162,11 +167,13 @@ names(res_cvfit) <- x_nms
 names(res_betas) <- x_nms
 names(res_cvtidy) <- x_nms
 names(res_cvtd) <- x_nms
-save(session_Info, res_cvfit, res_betas, res_cvtidy, file = Rdata_out)
+save(alphax, res_cvfit, res_betas, res_cvtidy, file = Rdata_out)
+# load(Rdata_out,verbose = TRUE)
 
 #-- Create xlsx
 
-xlsx_path <- paste0("./out/17out/res_betas-", alphax, ".xlsx")
+xlsx_path <- paste0("./out/17out/a_", alphax, "/res_betas.xlsx")
 write_xlsx(res_betas, xlsx_path)
-xlsx_path <- paste0("./out/17out/res_cvtidy-", alphax, ".xlsx")
+xlsx_path <- paste0("./out/17out/a_", alphax, "/res_cvtidy.xlsx")
 write_xlsx(res_cvtidy, xlsx_path)
+} # for alphai 

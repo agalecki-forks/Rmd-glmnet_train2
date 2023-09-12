@@ -114,7 +114,7 @@ names(train_data15)
 train_data_saved    <- train_data15
 ```
 
-## Selected vriables
+## Selected variables
 
 ```{r head15}
 range(train_data15$time)
@@ -177,7 +177,7 @@ clin_vars
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx)
 pen[1:length(clin_vars)] <- 0
-fit1 <- glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen)
+fit1 <- glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen)
 (gl_fit1 <- myglance(fit1))
 (td_fit1 <- mytidy(fit1))
 
@@ -216,8 +216,10 @@ plot(cvfit1)
 
 
 ```{r td-cvfit1}
-td_cvfit1 <- mytidy_Surv(cvfit1, x, ySurv)
-td_cvfit1$comment <- paste0("alpha=", alphax)
+td_cvfit1_init <- mytidy_Surv(cvfit1, x, ySurv)
+td_cvfit1_init$comment <- paste0("alpha=", alphax)
+td_cvfit1 <- td_cvfit1_init %>% mutate(alpha =alphax)%>%
+   relocate(alpha, .before = step)
 td_cv1 <-td_cvfit1  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
 td_cv1 %>% filter(mincv != "-") %>% print(n = 500)
 
@@ -226,8 +228,10 @@ td_cv1 %>% filter(mincv != "-") %>% print(n = 500)
 ## beta coefficients
 
 ```{r beta-coefs}
-beta1 <- td_cvfit1 %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
+beta1_init <- td_cvfit1 %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
                 unnest(beta) %>% group_by(step) 
+
+beta1 <- beta1_init %>% mutate(alpha = alphax) %>% relocate(alpha, .before = step)
 nrow(beta1)               
 beta1 %>% filter(mincv != "-") %>% print(n=400)
 ```

@@ -21,7 +21,7 @@ alphax <- params$alphax
 print(alphax)
 ```
 
-# LASSO (- `r ei` :=  `r xvars[ei]`)
+# alpha= `r alphax` (- `r ei` :=  `r xvars[ei]`)
 
 Covariate # `r ei` :=  `r xvars[ei]` removed 
 
@@ -66,7 +66,7 @@ ggplot(dfg , aes(x = log(lambda), y = estimate)) +
 ## cv.glmnet 
 
 ```{r cv-glmnet}
-cvfit <- cv.glmnet(x, ySurv, family = "cox", alpha=1, foldid = foldid, penalty.factor = pen, exclude =ei)
+cvfit <- cv.glmnet(x, ySurv, family = "cox", alpha=alphax, foldid = foldid, penalty.factor = pen, exclude =ei)
 cvfit
 # mytidy(cvfit)
 (mygl <- myglance(cvfit))
@@ -86,16 +86,21 @@ plot(cvfit)
 
 
 ```{r td-cvfit1}
-td_cvfit <- mytidy_Surv(cvfit, x, ySurv)
-td_cvfit$comment <- paste0("a=", alphax,";", ei, ":", xvars[ei], " removed") 
+td_cvfit_init <- mytidy_Surv(cvfit, x, ySurv)
+td_cvfit_init$comment <- paste0("a=", alphax,";", ei, ":", xvars[ei], " removed") 
+td_cvfit <- td_cvfit_init %>% mutate(alpha =alphax) %>%
+   relocate(alpha, .before = step)
+
 td_cv <-td_cvfit  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
 td_cv %>% filter(mincv != "-") %>% print(n = 500)
 ```
 ## beta coefficients
 
 ```{r betai}
-betai <- td_cvfit %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
+betai_init <- td_cvfit %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
            unnest(beta) %>% group_by(step)
+betai <- betai_init %>% mutate(alpha = alphax) %>% relocate(alpha, .before = step)
+
 nrow(betai)
 betai %>% filter(mincv != "-") %>% print(n=400)
 ```
