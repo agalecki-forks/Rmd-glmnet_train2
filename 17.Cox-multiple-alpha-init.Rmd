@@ -161,12 +161,12 @@ length(foldid)
 tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 ```
 
-#  LASSO
+#  Elastic net
 
 
-* lasso with penalty.factor
-
-* Clinical covariates forced into the model
+* Elastic net with penalty.factor
+* Clinical covariates forced into the model (pen =0)
+* Selected proteins with increased penalty factor
 
 ## glmnet
 
@@ -174,9 +174,14 @@ tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 
 ```{r beta1}
 clin_vars
+col_nmsx <- colnames(x)
 ncolx <- length(colnames(x))
-pen <- rep(1, times= ncolx)
-pen[1:length(clin_vars)] <- 0
+pen <- rep(1, times= ncolx) # default penalty =1
+names(pen) <- col_nmsx
+pen[clin_vars] <- 0
+prot_pen <- c("EPHA2.npx","RELT.npx")
+pen[prot_pen] <- 2
+pen
 fit1 <- glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen)
 (gl_fit1 <- myglance(fit1))
 (td_fit1 <- mytidy(fit1))
