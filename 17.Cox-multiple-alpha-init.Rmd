@@ -179,8 +179,9 @@ ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx) # default penalty =1
 names(pen) <- col_nmsx
 pen[clin_vars] <- 0
-prot_pen <- c("EPHA2.npx","RELT.npx")
-pen[prot_pen] <- 2
+# penalized proteins
+prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
+pen[prot_pen] <- 5
 pen
 fit1 <- glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen)
 (gl_fit1 <- myglance(fit1))

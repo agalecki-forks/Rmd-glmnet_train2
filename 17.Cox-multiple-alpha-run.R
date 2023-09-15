@@ -1,6 +1,7 @@
 # source("17.Cox-multiple-alpha-run.R")
 # Clears Global environment
  rm(list=ls())
+ T.1 <- T.2 <- T.3 <- NULL  # Use 99_test.R to examine these objects
  
  # Auxiliary functions
   
@@ -33,7 +34,7 @@
 mytidy_Surv <- function(cvfit, xnew, ySurv){
   # cv.glmnet fit, family = cox
    tmp <- list(cvfit= cvfit, xnew=xnew, ySurv= ySurv)
-   # assign("T.1", tmp, envir = .GlobalEnv)
+   assign("T.1", tmp, envir = .GlobalEnv)
    mygl <- myglance(cvfit)
    nlmbda <- mygl %>% select(n_lambda) %>% pull()
    idx_min <- mygl[, "index_min"] %>% pull()
@@ -45,7 +46,7 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    mincv[idx_min] <- "min>"
    mincv[idx_1se] <- "<1se"
    tmp <- list(mygl= mygl, cvtd = cvtd, idx = c(idx_1se, idx_min), mincv=mincv)
-   # assign("T.2", tmp, envir = .GlobalEnv)
+   assign("T.2", tmp, envir = .GlobalEnv)
 
    # print(length(mincv))
    cvtd$mincv <- mincv
@@ -55,10 +56,10 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
    td_fit <- mytidy(fit) %>% select(-c(step, lambda)) # with nested beta
    pred     <- predict(fit, newx = xnew)
    tmp <- list(pred = pred, fit = fit)
-   # assign("T.3", tmp, envir = .GlobalEnv)
+   assign("T.3", tmp, envir = .GlobalEnv)
 
-   C_index  <-  Cindex(pred, ySurv)
- 
+   ##-C_index  <-  Cindex(pred, ySurv) # corrected
+   C_index <- apply(pred, 2, Cindex, y=ySurv)
    info     <- BICAICglm(fit)
    info_tbl <- as_tibble(info)
    td_fit$Cindex <- C_index
@@ -97,6 +98,7 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
 # session Info
 session_Info <- sessionInfo()
 alphax_vals <- c(0.5,1)
+alphax_vals <- 1
 
 for (alphai in 1:length(alphax_vals)){
 
