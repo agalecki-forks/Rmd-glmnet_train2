@@ -45,10 +45,15 @@ tibble(foldid = foldid) %>% group_by(foldid) %>% count()
 ```{r glmnet-object}
 ei
 xvars[ei]
+col_nmsx <- colnames(x)
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx)
-pen[1:length(clin_vars)] <- 0
-
+names(pen) <- col_nmsx
+pen[clin_vars] <- 0
+# penalized proteins
+prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
+pen[prot_pen] <- 5
+pen
 
 fit <- glmnet(x, ySurv, family = "cox", alpha=1, penalty.factor = pen, exclude = ei)
 (gl_fit <- myglance(fit))
