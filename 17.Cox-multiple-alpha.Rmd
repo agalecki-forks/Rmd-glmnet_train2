@@ -161,7 +161,8 @@ colnames(res) <- cnms
 * Predictors 
 
 ```{r tcoefs3}
-rownames(coefs)
+# rownames(coefs)
+tibble(x=rownames(coefs), pen=pen) %>% print (n=100)
 print(res, col.names = TRUE)
 ```
 

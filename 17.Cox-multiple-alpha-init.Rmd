@@ -38,7 +38,7 @@ alphax <- params$alphax
 
 <!-- ========== Read raw data   ================= -->
 
-# Read raw data
+# Read raw data (alpha = `r alphax`)
 
 ```{r  Read-raw-data}
 excel_datain <- "./Data/data_example.xlsx" # Enter dataset name
@@ -120,8 +120,8 @@ train_data_saved    <- train_data15
 range(train_data15$time)
 range(train_data15$epsd)
 tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
-head(tt)
-tail(tt)
+# head(tt)
+# tail(tt)
 ```
 
 ## X matrix
@@ -216,6 +216,15 @@ lmbda
 plot(cvfit1)
 ```
 
+* C_V using Cindex
+
+```{r cvfit-plot-Cindex}
+cvfit1_Cindex <- cv.glmnet(x, ySurv, family = "cox",  type.measure ="C",
+                  alpha=alphax, penalty.factor = pen, foldid =foldid)
+plot(cvfit1_Cindex) # saved
+
+```
+
 ## c-v partial likelihood dev
 
 * cross-validated  partial likelihood deviance
@@ -294,7 +303,8 @@ colnames(res) <- cnms
 * Predictors 
 
 ```{r tcoefs3}
-rownames(coefs)
+tibble(x=rownames(coefs), pen=pen) %>% print (n=100)
+
 print(res, col.names = TRUE)
 ```
 
