@@ -97,8 +97,8 @@ mytidy_Surv <- function(cvfit, xnew, ySurv){
 
 # session Info
 session_Info <- sessionInfo()
-alphax_vals <- c(0.5,1)
-alphax_vals <- 1
+alphax_vals <- c(0, 0.25, 0.5,0.75, 1)
+
 
 for (alphai in 1:length(alphax_vals)){
 
