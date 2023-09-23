@@ -1,0 +1,331 @@
+---
+title: 'Cox Models multiple -preamble'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+params:
+   alphax: -99
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
+```
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as requested.
+
+
+```{r utilsag-lodaed}
+library(utilsag)
+```
+
+```{r params-read}
+alphax <- params$alphax
+```
+
+
+
+<!-- ========== Read raw data   ================= -->
+
+# Read raw data (alpha = `r alphax`)
+
+```{r  Read-raw-data}
+excel_datain <- "./Data/data_example.xlsx" # Enter dataset name
+dt <- read_excel(excel_datain)
+```
+
+## Data prep. 
+
+* Data are prepared for Cox regression.        
+```{r data-prep}
+ dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
+
+dim(dt) # Number of rows and columns in the input data
+```
+
+
+## Variables
+
+```{r Variables-used-Cox-model}
+prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
+              "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
+surv_vars <-  c("time", "status")
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")  ## excluded,"SEX","AGE_TL")
+xvars <- c(clin_vars, prot_npx)
+vars <- c(surv_vars, prot_npx, clin_vars) # For Model M2
+clin_vars
+```
+
+
+## Create dataset `datax`
+
+* Create dataset `datax` that contains subset of all vars needed for the analysis.
+
+```{r data-prep1}
+datax <- dt  %>% select(all_of(vars)) 
+dim(datax)         
+```
+
+
+## Complete cases
+
+* Keep rows with complete cases in `train_data` dataframe.
+
+
+```{r data-prep2}
+#drop any records with NA
+train_data <- datax %>% drop_na()    
+```
+
+## survSplit-cut
+
+```{r survSplit-cut}
+survSplit_cut <- 10  # Time horizon 10 years
+```
+
+## Create `train_data15`
+
+* Create data that is censored at `r survSplit_cut` years (prediction horizon)
+* extra varibles are created
+
+```{r survSplit}
+temp <- survSplit(Surv(time,  status) ~ ., data = train_data, cut = survSplit_cut,
+                  episode = "epsd")
+dim(train_data)
+
+train_data15 <- subset(temp, epsd == 1)  # only the first ?? years
+dim(train_data15)
+names(train_data15)
+train_data_saved    <- train_data15
+```
+
+## Selected variables
+
+```{r head15}
+range(train_data15$time)
+range(train_data15$epsd)
+tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
+# head(tt)
+# tail(tt)
+```
+
+## X matrix
+
+* Use `train_data15` to create X matrix and Surv object required by `glmnet`.
+
+```{r model-mtx}
+# Create X matrix
+# -dtx <- subset(train_data, select=-c(time,status))
+dtx <- train_data15 %>% select(all_of(xvars)) 
+x <- model.matrix(~0 +., data=dtx)
+dim(x)
+colnames(x)
+```
+
+## Create Surv object
+
+```{r surv-object}
+y <- data.matrix(train_data15[,c("time", "status")])
+ySurv <- survival::Surv(y[,"time"], y[, "status"])
+```
+
+## Create cv-folds 
+
+* (nfolds = 10 is default in `cv.glmnet`)
+
+```{r foldid-1}
+set.seed(1234)
+nfolds <-10
+foldid <- sample(1:nfolds, size = nrow(train_data15), replace=TRUE)
+length(foldid)
+```
+
+* Table with fold sizes is included below.
+
+```{r foldid-2}
+tibble(foldid = foldid) %>% group_by(foldid) %>% count()
+```
+
+#  Elastic net
+
+
+* Elastic net with penalty.factor
+* Clinical covariates forced into the model (pen =0)
+* Selected proteins with increased penalty factor
+
+## glmnet
+
+* All predictors included 
+
+```{r beta1}
+clin_vars
+col_nmsx <- colnames(x)
+ncolx <- length(colnames(x))
+pen <- rep(1, times= ncolx) # default penalty =1
+names(pen) <- col_nmsx
+pen[clin_vars] <- 0
+# penalized proteins
+prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
+pen[prot_pen] <- 5
+pen
+fit1 <- glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen)
+(gl_fit1 <- myglance(fit1))
+(td_fit1 <- mytidy(fit1))
+
+plot(fit1)
+## plot(fit1, xvar = "lambda", label = TRUE)
+
+```
+
+```{r  ggplot1-coefs}
+dfg1 <- td_fit1 %>% unnest(beta) %>% group_by(step) 
+
+ggplot(dfg1 , aes(x = log(lambda), y = estimate)) +
+       geom_line(aes(color = term)) + ylab("Coefficients")
+```
+
+
+## cv.glmnet
+
+```{r cv-fit1}
+cvfit1 <- cv.glmnet(x, ySurv, family = "cox", alpha=alphax, penalty.factor = pen, foldid =foldid)
+cvfit1 # saved
+
+
+(mygl1 <- myglance(cvfit1))
+lmbda <- mygl1[,c("lambda.min", "lambda.1se")] %>% 
+           mutate(log_lmin = log(lambda.min), log_l1se = log(lambda.1se))
+lmbda
+
+#mytidy(cvfit1)
+plot(cvfit1)
+```
+
+* C_V using Cindex
+
+```{r cvfit-plot-Cindex}
+cvfit1_Cindex <- cv.glmnet(x, ySurv, family = "cox",  type.measure ="C",
+                  alpha=alphax, penalty.factor = pen, foldid =foldid)
+plot(cvfit1_Cindex) # saved
+
+```
+
+## c-v partial likelihood dev
+
+* cross-validated  partial likelihood deviance
+
+
+```{r td-cvfit1}
+td_cvfit1_init <- mytidy_Surv(cvfit1, x, ySurv)
+td_cvfit1_init$comment <- paste0("alpha=", alphax)
+td_cvfit1 <- td_cvfit1_init %>% mutate(alpha =alphax)%>%
+   relocate(alpha, .before = step)
+td_cv1 <-td_cvfit1  %>% select(-c(beta, conf.low, conf.high, df, AICc)) 
+td_cv1 %>% filter(mincv != "-") %>% print(n = 500)
+
+```
+
+## beta coefficients
+
+```{r beta-coefs}
+beta1_init <- td_cvfit1 %>% select(c(step,lambda, nzero, beta, mincv, comment)) %>% 
+                unnest(beta) %>% group_by(step) 
+
+beta1 <- beta1_init %>% mutate(alpha = alphax) %>% relocate(alpha, .before = step)
+nrow(beta1)               
+beta1 %>% filter(mincv != "-") %>% print(n=400)
+```
+
+```{r coef-beta}
+bx1 <- beta1 %>% select(term, estimate, mincv)
+bx1 %>% filter(mincv == "1se" | mincv == "min" | mincv == "+")
+```
+
+## Coefficients path
+
+* Plot using glmnet fit object
+
+
+```{r beta-path}
+plot(fit1, xvar = "lambda", label = TRUE)
+```
+
+
+
+* Template for beta coefficients.
+* Rows correspond to (descending) sequence of lambda hyperparameters
+* Columns correspond to covariates
+
+```{r tcoefs1}
+coefs <- coef(fit1)
+ncoefs <- nrow(coefs)
+coef_nms <- rownames(coefs)
+snms <- colnames(coefs)
+idx_1se <- mygl1 %>% select(index_1se) %>% pull()
+idx_min <- mygl1 %>% select(index_min) %>% pull()
+
+snms[idx_1se] <- paste0("<" ,snms[idx_1se])
+snms[idx_min] <- paste0(snms[idx_min], ">")
+
+
+tx <- t(coefs)
+ttx <- t(tx)
+tx0 <- t(ttx != 0)
+idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
+idxr <- rank(idx)
+tmp <- idxr[c(idx_1se, idx_min)]
+idxr[c(idx_1se, idx_min)] <- tmp + 0.01
+
+sel <- which(!duplicated(idxr)) # idx -> idxr
+res <- tx0[sel,]
+rownames(res) <- snms[sel]
+```
+
+```{r tcoefs2}
+cnms <- 1:ncoefs
+colnames(res) <- cnms
+```
+* Predictors 
+
+```{r tcoefs3}
+tibble(x=rownames(coefs), pen=pen) %>% print (n=100)
+
+print(res, col.names = TRUE)
+```
+
+* Beta coefficients path
+
+```{r selected-betas}
+len.max <- 7
+whch_1se <- which(sel == idx_1se)
+whch_min <- which(sel == idx_min)
+selx <- sel[whch_1se:whch_min]
+selxx <- selx
+if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])
+c(idx_1se, idx_min)
+resx <- coefs[, selxx]
+round(resx,4)
+```
+
+```{r rmo}
+rm(idx_1se, idx_min, tmp, whch_1se, whch_min)
+#rm(coefs,  resx)
+
+```
+
+
