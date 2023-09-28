@@ -65,7 +65,8 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
-clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")  ## excluded,"SEX","AGE_TL")
+# clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")  ## excluded,"SEX","AGE_TL")
+clin_vars <- NULL
 xvars <- c(clin_vars, prot_npx)
 vars <- c(surv_vars, prot_npx, clin_vars) # For Model M2
 clin_vars
@@ -178,7 +179,7 @@ col_nmsx <- colnames(x)
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx) # default penalty =1
 names(pen) <- col_nmsx
-pen[clin_vars] <- 0
+## pen[clin_vars] <- 0
 # penalized proteins
 prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
 pen[prot_pen] <- 5
