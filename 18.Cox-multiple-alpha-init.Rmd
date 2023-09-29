@@ -120,9 +120,6 @@ train_data_saved    <- train_data15
 ```{r head15}
 range(train_data15$time)
 range(train_data15$epsd)
-tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
-# head(tt)
-# tail(tt)
 ```
 
 ## X matrix
@@ -282,17 +279,26 @@ idx_min <- mygl1 %>% select(index_min) %>% pull()
 
 snms[idx_1se] <- paste0("<" ,snms[idx_1se])
 snms[idx_min] <- paste0(snms[idx_min], ">")
+```
 
+```{r tcoefs2x}
+
+# s0 and last s#
+colnames(coefs)[c(1, length(colnames(coefs)))]
+lenx <- length(colnames(coefs))
 
 tx <- t(coefs)
 ttx <- t(tx)
 tx0 <- t(ttx != 0)
 idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
 idxr <- rank(idx)
-tmp <- idxr[c(idx_1se, idx_min)]
-idxr[c(idx_1se, idx_min)] <- tmp + 0.01
+sel0 <- which(!duplicated(idxr))
+# truncate sel if needed
 
-sel <- which(!duplicated(idxr)) # idx -> idxr
+sel1 <- c(sel0, idx_1se, idx_min, lenx)
+sel2 <- sel1[sel1 <= lenx] 
+sel3 <- sel2[!duplicated(sel2)]
+sel <- sort(sel3) 
 res <- tx0[sel,]
 rownames(res) <- snms[sel]
 ```
@@ -315,6 +321,7 @@ print(res, col.names = TRUE)
 len.max <- 7
 whch_1se <- which(sel == idx_1se)
 whch_min <- which(sel == idx_min)
+if (lengthwhch_1se
 selx <- sel[whch_1se:whch_min]
 selxx <- selx
 if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])

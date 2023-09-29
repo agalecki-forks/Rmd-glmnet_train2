@@ -49,7 +49,7 @@ col_nmsx <- colnames(x)
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx)
 names(pen) <- col_nmsx
-pen[clin_vars] <- 0
+#pen[clin_vars] <- 0
 # penalized proteins
 prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
 pen[prot_pen] <- 5
@@ -139,18 +139,29 @@ idx_min <- mygl %>% select(index_min) %>% pull()
 
 snms[idx_1se] <- paste0("<" ,snms[idx_1se])
 snms[idx_min] <- paste0(snms[idx_min], ">")
+```
+
+```{r tcoefs2x}
+
+# s0 and last s#
+colnames(coefs)[c(1, length(colnames(coefs)))]
+lenx <- length(colnames(coefs))
 
 tx <- t(coefs)
 ttx <- t(tx)
 tx0 <- t(ttx != 0)
 idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
 idxr <- rank(idx)
-tmp <- idxr[c(idx_1se, idx_min)] 
-idxr[c(idx_1se, idx_min)] <- tmp +0.01
-sel <- which(!duplicated(idxr))
+sel0 <- which(!duplicated(idxr))
+# truncate sel if needed
+sel1 <- c(sel0, idx_1se, idx_min, lenx)
+sel2 <- sel1[sel1 <= lenx] 
+sel3 <- sel2[!duplicated(sel2)]
+sel <- sort(sel3) 
 res <- tx0[sel,]
 rownames(res) <- snms[sel]
 ```
+
 
 ```{r tcoefs2}
 cnms <- 1:ncoefs
