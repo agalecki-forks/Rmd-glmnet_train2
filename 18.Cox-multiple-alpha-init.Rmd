@@ -312,7 +312,7 @@ colnames(res) <- cnms
 ```{r tcoefs3}
 tibble(x=rownames(coefs), pen=pen) %>% print (n=100)
 
-print(res, col.names = TRUE)
+# print(res, col.names = TRUE)
 ```
 
 * Beta coefficients path
@@ -321,8 +321,8 @@ print(res, col.names = TRUE)
 len.max <- 7
 whch_1se <- which(sel == idx_1se)
 whch_min <- which(sel == idx_min)
-if (lengthwhch_1se
-selx <- sel[whch_1se:whch_min]
+whch <- c(whch_1se, whch_min)
+selx <- sel[sel == whch]
 selxx <- selx
 if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])
 c(idx_1se, idx_min)
