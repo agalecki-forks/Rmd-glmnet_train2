@@ -286,19 +286,19 @@ snms[idx_min] <- paste0(snms[idx_min], ">")
 # s0 and last s#
 colnames(coefs)[c(1, length(colnames(coefs)))]
 lenx <- length(colnames(coefs))
-
 tx <- t(coefs)
 ttx <- t(tx)
 tx0 <- t(ttx != 0)
 idx <- apply(tx0, 1, function(x) paste(ifelse(x, 1, 0), collapse =""))
 idxr <- rank(idx)
+
 sel0 <- which(!duplicated(idxr))
 # truncate sel if needed
-
 sel1 <- c(sel0, idx_1se, idx_min, lenx)
 sel2 <- sel1[sel1 <= lenx] 
 sel3 <- sel2[!duplicated(sel2)]
 sel <- sort(sel3) 
+
 res <- tx0[sel,]
 rownames(res) <- snms[sel]
 ```
@@ -321,12 +321,13 @@ print(res, col.names = TRUE)
 len.max <- 7
 whch_1se <- which(sel == idx_1se)
 whch_min <- which(sel == idx_min)
+
 whch <- c(whch_1se, whch_min)# Position in sel vector
 if (length(whch) == 0) whch = 1
 if (length(whch) > 1)  whch = whch_1se:whch_min
-
 selx <- sel[whch]
 selxx <- selx
+
 if (length(selx) > len.max) selxx <- c(selx[1:(len.max-1)], selx[length(selx)])
 c(idx_1se, idx_min)
 resx <- coefs[, selxx]
