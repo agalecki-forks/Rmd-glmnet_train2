@@ -1,4 +1,4 @@
-# source("17.Cox-multiple-alpha-run.R")
+# source("18.Cox-multiple-alpha-run.R")
 # Clears Global environment
  rm(list=ls())
  T.1 <- T.2 <- T.3 <- NULL  # Use 99_test.R to examine these objects
@@ -8,7 +8,7 @@
  names3_aux <- function(basenm, postfix){ 
     nmRmd <- paste0(basenm, ".Rmd")
     nmR <- paste0("./purl/", basenm, ".Rprog")
-    nm_out <- paste0( "./out/17out/html/", basenm, postfix)
+    nm_out <- paste0( "./out/18out/html/", basenm, postfix)
     c(nmRmd = nmRmd, nmR = nmR, nm_out = nm_out)  
  }
  
@@ -104,7 +104,7 @@ for (alphai in 1:length(alphax_vals)){
 
  alphax <- alphax_vals[alphai]
 
-Rdata_out <- paste0("./out/17out/a_", alphax, "/17-cox-multiple-alpha.Rdata")
+Rdata_out <- paste0("./out/18out/a_", alphax, "/18-cox-multiple-alpha.Rdata")
 
 save(session_Info, file = Rdata_out)
 
@@ -112,9 +112,9 @@ save(session_Info, file = Rdata_out)
 
 
 # process -init.Rmd
-bnm <- "17.Cox-multiple-alpha"   # Basename of Rmd file (do not change it)
+bnm <- "18.Cox-multiple-alpha"   # Basename of Rmd file (do not change it)
 bnm_init <- paste0(bnm, "-init.Rmd")
-out_init <- paste0("./out/17out/a_", alphax,"/", bnm, "-init")
+out_init <- paste0("./out/18out/a_", alphax,"/", bnm, "-init")
 print(out_init)
 parms <- list(alphax = alphax)
 
@@ -144,7 +144,7 @@ for (ix in 1:len){
  paramsi <- list(alphax = alphax, ei = ii)   # index of covariate excluded
  nmsj <- names3_aux(bnm, ii)
  knitr::purl(nmsj["nmRmd"], output = nmsj["nmR"])
- out_nm <- paste0("./out/17out/a_", alphax,"/html/", bnm, ii)
+ out_nm <- paste0("./out/18out/a_", alphax,"/html/", bnm, ii)
  rmarkdown::render(nmsj["nmRmd"], "all", output_file = out_nm , params = paramsi)
  # print(cvfiti)
  # save objects : cvfit, td_cvfit 
@@ -174,8 +174,8 @@ save(alphax, res_cvfit, res_betas, res_cvtidy, file = Rdata_out)
 
 #-- Create xlsx
 
-xlsx_path <- paste0("./out/17out/a_", alphax, "/res_betas.xlsx")
+xlsx_path <- paste0("./out/18out/a_", alphax, "/res_betas.xlsx")
 write_xlsx(res_betas, xlsx_path)
-xlsx_path <- paste0("./out/17out/a_", alphax, "/res_cvtidy.xlsx")
+xlsx_path <- paste0("./out/18out/a_", alphax, "/res_cvtidy.xlsx")
 write_xlsx(res_cvtidy, xlsx_path)
 } # for alphai 

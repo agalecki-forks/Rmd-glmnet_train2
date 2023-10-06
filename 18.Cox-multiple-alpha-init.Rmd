@@ -65,7 +65,8 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
-clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")  ## excluded,"SEX","AGE_TL")
+# clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")  ## excluded,"SEX","AGE_TL")
+clin_vars <- NULL
 xvars <- c(clin_vars, prot_npx)
 vars <- c(surv_vars, prot_npx, clin_vars) # For Model M2
 clin_vars
@@ -119,9 +120,6 @@ train_data_saved    <- train_data15
 ```{r head15}
 range(train_data15$time)
 range(train_data15$epsd)
-tt <- train_data15 %>% select(BL_eGFR, tstart, time, status, epsd)
-# head(tt)
-# tail(tt)
 ```
 
 ## X matrix
@@ -178,7 +176,7 @@ col_nmsx <- colnames(x)
 ncolx <- length(colnames(x))
 pen <- rep(1, times= ncolx) # default penalty =1
 names(pen) <- col_nmsx
-pen[clin_vars] <- 0
+## pen[clin_vars] <- 0
 # penalized proteins
 prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
 pen[prot_pen] <- 5
@@ -288,7 +286,6 @@ snms[idx_min] <- paste0(snms[idx_min], ">")
 # s0 and last s#
 colnames(coefs)[c(1, length(colnames(coefs)))]
 lenx <- length(colnames(coefs))
-
 tx <- t(coefs)
 ttx <- t(tx)
 tx0 <- t(ttx != 0)
@@ -297,11 +294,11 @@ idxr <- rank(idx)
 
 sel0 <- which(!duplicated(idxr))
 # truncate sel if needed
-
 sel1 <- c(sel0, idx_1se, idx_min, lenx)
 sel2 <- sel1[sel1 <= lenx] 
 sel3 <- sel2[!duplicated(sel2)]
 sel <- sort(sel3) 
+
 res <- tx0[sel,]
 rownames(res) <- snms[sel]
 ```
