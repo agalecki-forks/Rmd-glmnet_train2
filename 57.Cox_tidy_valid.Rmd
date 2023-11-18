@@ -1,0 +1,456 @@
+---
+title: 'Validation of Cox Model M2'
+author: "Chunyi Wu and Andrzej Galecki"
+date: "`r as.character(Sys.Date(), format = '%A %B %d, %Y')`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+params:
+   row_no: 4 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+row_no <- params$row_no #
+mod_lbl <- "M2" # Model M2 only   
+```
+
+```{r data, include = FALSE}
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolki 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  glmnetUtils,  #Glmnet models for multiple alpha
+  coefplot,     # Plotting Model Coefficients
+  survival,     #survival model 
+  tidymodels,   #for modeling and machine learning using tidyverse principles
+  survivalROC   #survivalROC
+  )
+```
+
+```{r utilsag-version-2test, include = FALSE}
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+```
+
+```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
+```
+
+This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+as requested.
+
+
+```{r utilsag-lodaed}
+library(utilsag)
+```
+
+
+
+# Introduction (`r mod_lbl`, run = `r row_no`)
+
+In this report we consider Cox regression model `r mod_lbl` for the time-to-event `time` variable. 
+
+<!-- Conditonal text inserted -->  
+`r if(mod_lbl == "M0"){
+"Model M0 contains baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
+}`
+
+`r if(mod_lbl == "M1"){
+"Model M1 contains 21 proteins as candidate predictors."
+}`
+
+
+`r if(mod_lbl == "M2"){
+"Model M2 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
+}`
+<!-- Conditonal text ends --> 
+
+Notes: 
+
+* Originally `time` variable was named `FU_TIME`.  
+* `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
+
+
+## Test data prep
+
+Test data prepared for validation of Cox regression model `r mod_lbl`.        
+
+```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+#read the data that is stored under the `validation_input` folder
+
+dt <- read_excel("./validation_input/data_validation.xlsx")
+
+dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
+
+dim(dt) # Number of rows and columns in the input data
+```
+Variable names used in Cox regression model are stored in the following vectors:
+
+* Proteins in `prot_npx`,
+* Time/status in `surv_vars`,
+* Clinical variables in `clin_vars`
+
+```{r Variables-used-Cox}
+prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
+              "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
+surv_vars <-  c("time", "status")
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+xvars <- c(clin_vars, prot_npx)
+```
+
+
+
+Data preparation: 
+
+* Vector `vars`  contains all variable names needed to specify model `r mod_lbl` 
+considered in this document
+
+```{r select-vars, include =FALSE}
+
+if (mod_lbl == "M0") vars <- c(surv_vars, clin_vars) 
+if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M2") vars <- c(surv_vars, prot_npx, clin_vars) 
+
+```
+
+```{r vars vector}
+vars
+```
+
+* Create dataset `data` that contains subset of all vars needed for the analysis.
+
+```{r data-prep1}
+data <- dt  %>% select(all_of(vars)) 
+dim(data)         
+```
+
+* Keep rows with complete cases in `test_data` dataframe.
+
+
+```{r data-prep2}
+# drop any records with NA
+test_data <- data %>% drop_na()    
+
+# Total sample size
+nrow(test_data)
+```
+
+# Preparatory steps
+
+Load fles with info on selected models fitted using traininig data.
+
+```{r load-train-objects}
+fpath1 <- paste0("./validation_input/5.Cox_tidy_valid", mod_lbl, ".Rdata")
+load (file = fpath1, verbose = TRUE)
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+sel3long
+```
+
+In this document, we assess performance of the model `r mod_lbl` with the hyperparameters
+listed below:
+
+```{r hyperparametrs-selected}
+row_no
+(sel <- sel3long[row_no,])   # Select row with the info
+```
+
+Values of hyperparameters stored
+
+```{r hyperparametrs-printed}
+a_idx     <- sel[["a_idx"]]
+a_opt     <- sel[["alpha"]]
+lmbda_opt <- sel[["lmbda"]]
+```
+
+Unique $\alpha$ values for selected models stored in `alphv` vector.
+
+```{r unique-alphas}
+tmp <- sel3long %>% select(alpha) %>% unique()
+(alphv <- as.vector(t(tmp)))
+```
+
+## survSplit
+
+* Create test_data  that is administratively censored at `r survSplit_cut`(time horizon)
+
+```{r survSplit}
+message("survSplit_cut =", survSplit_cut)
+
+temp <- survSplit(Surv(time,  status) ~ ., data = test_data, cut = survSplit_cut,
+                  episode = "epsd")
+dim(test_data)
+test_data15 <- subset(temp, epsd == 1)  # only the first ?? years
+dim(test_data15)
+test_data_saved <- test_data
+test_data    <-  test_data15
+```
+
+
+
+Matrix X and `Surv` object extracted from the `test_data`
+
+```{r x-surv-test}
+# - dtx_test <- subset(test_data, select=-c(time,status))
+dtx_test <- test_data %>% select(all_of(xvars)) 
+x_test <- model.matrix(~0 +., data=dtx_test)
+dim(x_test)
+colnames(x_test)
+# Create Surv object
+y_test <- data.matrix(test_data[,c("time", "status")])
+ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
+```
+
+We extract model fit for a given $\alpha$ and store it in `cv_opt_model` object
+for later use.
+
+```{r cva-glmnet-fit}
+cv_opt_model <- cva_modlist[[a_idx]]
+class(cv_opt_model)
+pfit_aopt  <- cv_opt_model$glmnet.fit
+class(pfit_aopt)
+```
+
+# Model Performance 
+
+
+
+
+Predictive performance of a selected model using _standard_ approach.
+
+
+## C-index
+
+Step 1: Linear predictor estimation 
+
+Estimate linear predictor values for the Cox model fitted to test data. 
+
+```{r calc-pred2}
+predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+# predM_lp <- - predM_lp # !!!
+predM_lp[1:10]
+summary(predM_lp)
+```
+ 
+
+Step2: C-index calculations
+
+Ref: Harrel Jr, F. E. and Lee, K. L. and Mark, D. B. (1996) Tutorial in biostatistics:
+multivariable prognostic models: issues in developing models, evaluating assumptions 
+and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pages 361-387.
+
+
+```{r C-index-Mod}
+Cindex_lmbda <- apply(predM_lpmtx, 2, Cindex, y = ySurv_test) # Multiple lambda
+length(Cindex_lmbda)
+Cindex_lmbda[1:12] 
+
+Cindex(predM_lp, ySurv_test)   # For optimal lambda
+```
+
+
+
+
+
+
+## Time-dependent ROC
+
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
+
+```{r surv-roc}
+dataM_test <- test_data
+                
+## Augment `dataM_test` with linear predictor
+ dataM_test$predM_lp <- predM_lp
+
+# Evaluate every 2.5 years
+ 
+tx <- 2.5* c(1,2,3,4) # ROC time points
+tx
+predM_lp[1:10]
+survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+ 
+survROC_lp %>% print (n=50)
+```
+
+* Plot Time-dependent ROC every 2.5 years
+
+```{r surv-roc-plot}
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp) 
+```
+
+
+```{r exit0, include=FALSE}
+knitr::knit_exit()
+```
+
+<!-- commented out
+
+# Tidymodels
+
+```{r load-train2-objects}
+fpath1 <- paste0("./validation_input/5.Cox_tidy_train", mod_lbl, ".Rdata")
+load (file = fpath1, verbose = TRUE)
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
+dim(train_data15)
+names(train_data15)
+train_dt <- train_data15 %>%  select(all_of(vars))
+```
+
+
+Fit optimal models using tidymodels
+Based on (https://parsnip.tidymodels.org/reference/details_proportional_hazards_glmnet.html)
+
+```{r tidy-libs}
+library(survival)
+library(censored)
+library(dplyr)
+library(tidyr)
+```
+
+
+## Model fits 
+
+Create `mod_all` object for selected `alpha` 
+
+```{r tidy-Mod-all}
+# Model for all alpha
+mod_all <- map(alphv, function(a){
+  proportional_hazards(penalty = tune(), mixture = a) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = train_dt)
+})
+length(mod_all)
+tmp <- mod_all[[2]]
+class(tmp)
+```
+
+* Create `mod_opt` object by fitting models to `train_dt` using selected set of 
+hyperparameters.
+
+```{r tidy-Mod-opt}
+print(a_opt)      #  optimal alpha
+print(lmbda_opt)  #  optimal lambda
+
+mod_opt <- 
+  proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
+  set_engine("glmnet") %>% 
+  fit(Surv(time, status) ~ ., data = train_dt)
+class(mod_opt)
+```
+
+comment ends -->
+
+<!-- commented out
+# Model Performance (tidy)
+
+
+## Predicted values
+
+Create tibble with predicted values for `r mod_lbl`:
+Predicted values are calculated for:
+
+* Linear predictor (`.pred_linear_pred`)
+* Survival time (`.pred_time`)
+* Survival probabilities at selected time points (`.pred`)
+
+```{r  pred-coxnet-mod-opt}
+pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
+pred_M
+pred_M %>% unnest(.pred)
+```
+
+Summary statistics for linear predictor
+
+```{r summary-lp-tidy}
+summary(pred_M$.pred_linear_pred)
+```
+
+
+## C-index
+
+
+```{r Cindex-tidy}
+summ_M <- pred_M %>%
+                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
+summ_M$Cindex
+```
+comment ends -->
+
+<!--  commented out
+## Plot predicted time
+
+* Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
+
+```{r plot-predM}
+   
+range(pred_M$time)
+range(pred_M$.pred_time)
+
+ggplot(pred_M, aes(x = time, y= .pred_time)) +
+     coord_fixed() +            # ratio parameter defaults to 1
+     xlim(0,17) + ylim(0, 17) +
+     geom_point(aes(color = factor(status))) +
+     geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
+
+```
+comment ends -->
+
+<!-- commented out
+## Time-dependent ROC
+
+```{r plot-timedep-ROC-pred_M}
+tx <- 2.5* c(1,2,3,4)    # ROC time points 
+tx
+survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
+survROC_data %>% print(n=50)
+
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_data) 
+```
+
+
+
+```{r save-objects, include =FALSE}
+#- fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
+#save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
+
+#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
+# save(mod_selected, cva_pfit, mod_all, file = fpath2)
+```
+comment ends -->
+
+* Reinstall original version of `r "utilsag"` package
+
+```{r reinstall-original-utilsag, include=FALSE}
+
+if (uag_ver != uag_ver0){ # reinstall original utilsag version
+    if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+    devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
+}
+```
+```{r exit1, include=FALSE}
+knitr::knit_exit()
+```
