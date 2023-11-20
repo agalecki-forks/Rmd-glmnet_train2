@@ -7,6 +7,6 @@ nmRmd <- paste0(bnm, ".Rmd")
 nmR <- paste0("./purl/", bnm,".Rprog")
 knitr::purl(nmRmd, output = nmR)
 
-parms <- list(mod_lbl ="M0")  #  <-----
+parms <- list(mod_lbl ="M3")  #  <-----
 output_file <- paste0(bnm,"_", parms$mod_lbl)
 rmarkdown::render(nmRmd, "all", output_file = output_file, params = parms)
