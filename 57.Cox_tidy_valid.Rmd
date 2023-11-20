@@ -6,14 +6,10 @@ output:
   rmdformats::readthedown:
     lightbox: true
     use_bookdown: true
-params:
-   row_no: 4 
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, comment="#>")
-row_no <- params$row_no #
-mod_lbl <- "M2" # Model M2 only   
 ```
 
 ```{r data, include = FALSE}
@@ -56,11 +52,15 @@ as requested.
 
 ```{r utilsag-lodaed}
 library(utilsag)
+mod_lbl <-"M3"
+alphax <- 0.25
+survSplit_cut <- 10
+
 ```
 
 
 
-# Introduction (`r mod_lbl`, run = `r row_no`)
+# Introduction (`r mod_lbl`)
 
 In this report we consider Cox regression model `r mod_lbl` for the time-to-event `time` variable. 
 
@@ -113,7 +113,8 @@ prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "LTBR.npx") 
 surv_vars <-  c("time", "status")
 clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
-xvars <- c(clin_vars, prot_npx)
+clin_vars3 <-  c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")
+xvars <- c(clin_vars3, prot_npx)
 ```
 
 
@@ -123,22 +124,23 @@ Data preparation:
 * Vector `vars`  contains all variable names needed to specify model `r mod_lbl` 
 considered in this document
 
-```{r select-vars, include =FALSE}
+```{r select-mvars, include =FALSE}
 
-if (mod_lbl == "M0") vars <- c(surv_vars, clin_vars) 
-if (mod_lbl == "M1") vars <- c(surv_vars, prot_npx, clin_vars) 
-if (mod_lbl == "M2") vars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M0") mvars <- c(surv_vars, clin_vars) 
+if (mod_lbl == "M1") mvars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M2") mvars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M3") mvars <- c(surv_vars, prot_npx, clin_vars3) 
 
 ```
 
 ```{r vars vector}
-vars
+mvars
 ```
 
 * Create dataset `data` that contains subset of all vars needed for the analysis.
 
 ```{r data-prep1}
-data <- dt  %>% select(all_of(vars)) 
+data <- dt  %>% select(all_of(mvars)) 
 dim(data)         
 ```
 
@@ -158,35 +160,20 @@ nrow(test_data)
 Load fles with info on selected models fitted using traininig data.
 
 ```{r load-train-objects}
-fpath1 <- paste0("./validation_input/5.Cox_tidy_valid", mod_lbl, ".Rdata")
+fpath1 <- paste0("./validation_input/17-cox-0.25", mod_lbl, ".Rdata")
 load (file = fpath1, verbose = TRUE)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
-sel3long
+
 ```
 
 In this document, we assess performance of the model `r mod_lbl` with the hyperparameters
 listed below:
 
 ```{r hyperparametrs-selected}
-row_no
-(sel <- sel3long[row_no,])   # Select row with the info
+alphax
 ```
 
-Values of hyperparameters stored
-
-```{r hyperparametrs-printed}
-a_idx     <- sel[["a_idx"]]
-a_opt     <- sel[["alpha"]]
-lmbda_opt <- sel[["lmbda"]]
-```
-
-Unique $\alpha$ values for selected models stored in `alphv` vector.
-
-```{r unique-alphas}
-tmp <- sel3long %>% select(alpha) %>% unique()
-(alphv <- as.vector(t(tmp)))
-```
 
 ## survSplit
 
@@ -223,10 +210,17 @@ We extract model fit for a given $\alpha$ and store it in `cv_opt_model` object
 for later use.
 
 ```{r cva-glmnet-fit}
-cv_opt_model <- cva_modlist[[a_idx]]
-class(cv_opt_model)
-pfit_aopt  <- cv_opt_model$glmnet.fit
+names(res_cvfit)
+cvfit <- res_cvfit$ALLx
+
+pfit_aopt <- cvfit$glmnet
 class(pfit_aopt)
+names(pfit_aopt)
+pfit_aopt$lambda
+
+lmbda <- pfit_aopt$lambda
+lmbda_sel <-lmbda[c(1, 15, 18,24,30)]
+lmbda_opt <- lmbda_sel[1]
 ```
 
 # Model Performance 
@@ -267,11 +261,6 @@ Cindex_lmbda[1:12]
 Cindex(predM_lp, ySurv_test)   # For optimal lambda
 ```
 
-
-
-
-
-
 ## Time-dependent ROC
 
 * source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
@@ -302,155 +291,5 @@ plot_timedep_ROC(survROC_lp)
 
 
 ```{r exit0, include=FALSE}
-knitr::knit_exit()
-```
-
-<!-- commented out
-
-# Tidymodels
-
-```{r load-train2-objects}
-fpath1 <- paste0("./validation_input/5.Cox_tidy_train", mod_lbl, ".Rdata")
-load (file = fpath1, verbose = TRUE)
-#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
-# save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
-dim(train_data15)
-names(train_data15)
-train_dt <- train_data15 %>%  select(all_of(vars))
-```
-
-
-Fit optimal models using tidymodels
-Based on (https://parsnip.tidymodels.org/reference/details_proportional_hazards_glmnet.html)
-
-```{r tidy-libs}
-library(survival)
-library(censored)
-library(dplyr)
-library(tidyr)
-```
-
-
-## Model fits 
-
-Create `mod_all` object for selected `alpha` 
-
-```{r tidy-Mod-all}
-# Model for all alpha
-mod_all <- map(alphv, function(a){
-  proportional_hazards(penalty = tune(), mixture = a) %>% 
-  set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_dt)
-})
-length(mod_all)
-tmp <- mod_all[[2]]
-class(tmp)
-```
-
-* Create `mod_opt` object by fitting models to `train_dt` using selected set of 
-hyperparameters.
-
-```{r tidy-Mod-opt}
-print(a_opt)      #  optimal alpha
-print(lmbda_opt)  #  optimal lambda
-
-mod_opt <- 
-  proportional_hazards(penalty = lmbda_opt, mixture = a_opt) %>% 
-  set_engine("glmnet") %>% 
-  fit(Surv(time, status) ~ ., data = train_dt)
-class(mod_opt)
-```
-
-comment ends -->
-
-<!-- commented out
-# Model Performance (tidy)
-
-
-## Predicted values
-
-Create tibble with predicted values for `r mod_lbl`:
-Predicted values are calculated for:
-
-* Linear predictor (`.pred_linear_pred`)
-* Survival time (`.pred_time`)
-* Survival probabilities at selected time points (`.pred`)
-
-```{r  pred-coxnet-mod-opt}
-pred_M <- pred_censored_coxnet(mod_opt, dataM_test, time_points = c(5,10))
-pred_M
-pred_M %>% unnest(.pred)
-```
-
-Summary statistics for linear predictor
-
-```{r summary-lp-tidy}
-summary(pred_M$.pred_linear_pred)
-```
-
-
-## C-index
-
-
-```{r Cindex-tidy}
-summ_M <- pred_M %>%
-                summarize(Cindex = Cindex(.pred_linear_pred, Surv(time, status)))
-summ_M$Cindex
-```
-comment ends -->
-
-<!--  commented out
-## Plot predicted time
-
-* Plot predicted  (y-axis) versus observed (x-axis) time to ESKD by status 
-
-```{r plot-predM}
-   
-range(pred_M$time)
-range(pred_M$.pred_time)
-
-ggplot(pred_M, aes(x = time, y= .pred_time)) +
-     coord_fixed() +            # ratio parameter defaults to 1
-     xlim(0,17) + ylim(0, 17) +
-     geom_point(aes(color = factor(status))) +
-     geom_segment(aes(x = min(time), y = min(time), xend = max(time), yend = max(time)))
-
-```
-comment ends -->
-
-<!-- commented out
-## Time-dependent ROC
-
-```{r plot-timedep-ROC-pred_M}
-tx <- 2.5* c(1,2,3,4)    # ROC time points 
-tx
-survROC_data <- create_survivalROC_data(tx, pred_M, .pred_linear_pred)
-survROC_data %>% print(n=50)
-
-## Plot Time-dependent ROC every 2.5 years
-plot_timedep_ROC(survROC_data) 
-```
-
-
-
-```{r save-objects, include =FALSE}
-#- fpath <- paste0("./save/5.Cox_tidy_", mod_lbl, ".Rdata")
-#save(cva_pfit, mod_all, mod_opt, alphv, file = fpath)
-
-#- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
-# save(mod_selected, cva_pfit, mod_all, file = fpath2)
-```
-comment ends -->
-
-* Reinstall original version of `r "utilsag"` package
-
-```{r reinstall-original-utilsag, include=FALSE}
-
-if (uag_ver != uag_ver0){ # reinstall original utilsag version
-    if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
-    devtools::install_github("agalecki/utilsag", ref =paste0("version-", uag_ver))
-}
-```
-```{r exit1, include=FALSE}
 knitr::knit_exit()
 ```
