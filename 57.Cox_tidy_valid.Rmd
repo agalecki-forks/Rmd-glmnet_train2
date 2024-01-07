@@ -213,6 +213,30 @@ y_test <- data.matrix(test_data[,c("time", "status")])
 ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
 ```
 
+Auxiliary calculations:
+
+* cens10: Censored obs. Follow-up less than 10 years and event has not occurred
+* Cp10_test: Percent of censored obs (based on cens10)
+* PN10_test: PN is the total number of actual positives
+
+```{r auxx}
+cens10 <- ifelse(y_test[,"time"]  < 10 & y_test[, "status"]== 0, 1, 0)
+
+table(cens10)
+ttx <- cbind(y_test[,"time"], y_test[, "status"], cens10)
+colnames(ttx) <- c("time", 'status', "cens10")
+ttx[1:10,]
+Cp10_test <- sum(cens10)/length(cens10) 
+nnc <- sum(cens10 ==0) # number of non-censored obs
+nev <- sum(cens10 ==0 & y_test[, "status"]==1)
+prev10_test <- nev/nnc  #prevalence
+Cp_test <- Cp10_test
+prev_test <- prev10_test
+
+# Cleanup
+Cp10_test <- prev10_test <- NULL
+```
+
 We extract model fit for a given $\alpha$ and store it in `cv_opt_model` object
 for later use.
 
@@ -226,7 +250,7 @@ names(pfit_aopt)
 pfit_aopt$lambda
 
 lmbda <- pfit_aopt$lambda
-sel <- c(1, 15, 18, 24, 30)
+sel <- c(1, 15, 18, 24, 31) # 30 -> 31
 nms <- paste0("step", sel)
 lmbda_sel <-lmbda[sel]
 names(lmbda_sel) <- nms
@@ -260,7 +284,7 @@ multivariable prognostic models: issues in developing models, evaluating assumpt
 and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pages 361-387.
 
 
-Note: s0, ... s29 correspond to step1, ... step30
+Note: s0, ... s30 correspond to step1, ... step31
 
 ```{r C-index-Mod}
 Cindex_lmbda <- apply(predM_lpmtx, 2, Cindex, y = ySurv_test) # Multiple lambda
@@ -271,19 +295,57 @@ Cindex_lmbda[sel]
 #Cindex(predM_lp, ySurv_test)   # For optimal lambda
 ```
 
-## Time-dependent ROC for step1
+# Time-dependent ROC for various `step` values
 
 
-### ROC for step1
+* Initialize list with the results
+
+
+```{r res-list}
+lmbda_sel
+len <- length(lmbda_sel)
+survROC_list <- vector(mode ="list", length = len)
+names(survROC_list) <- names(lmbda_sel)
+str(survROC_list)
+```
+
+## Score (illustration)
+
+Higher `BL_eGFR` -> lower score -> lower hazard of developing ESKD
+
+```{r score-details}
+tmp1 <- apply(x_test, 2, mean)
+tmp2 <- tmp1
+tmp2["BL_eGFR"] <- tmp1["BL_eGFR"]+10
+x_toy <- rbind(tmp1,tmp2)
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_toy, type = "link", s = lmbda_opt))
+res <-cbind(x_toy[, "BL_eGFR"], predM_lp) 
+colnames(res) <- c("BL_eGFR", "lp_score")
+res
+```
+
+<!--   ------  STEP1  ------ -->
+
+```{r step1-roc, echo = FALSE}
+step_sel <- "step1"
+```
+
+## ROC for `r step_sel`
 
 * source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
-
+* Youden W. J. Index for rating diagnostic tests. Cancer. 1950;3(1):32-35
+* https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5470053/
+* Pepe M. S. The Statistical Evaluation of Medical Tests for Classification and Prediction. Vol. 28. Oxford, UK: Oxford University Press; 2003. (Oxford Statistical Science Series)
+* Perkins N. J., Schisterman E. F. The inconsistency of optimal cut-points using two ROC based criteria. American Journal of Epidemiology. 2006;163(7):670-675.
+* Liu X. Classification accuracy and cut point selection. Statistics in Medicine. 2012;31(23):2676-2686. doi: 10.1002/sim.4509
+* Ilkr Unal Defining an Optimal Cut-Point Value in ROC Analysis: An Alternative Approach Comput Math Methods Med. 2017; 2017: 3762651. Published online 2017 May 31.  
 
 ```{r surv-roc}
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 
-lmbda_opt <-  lmbda_sel[names(lmbda_sel) == "step1"]
+
+lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
 # predM_lp <- - predM_lp # !!!
 predM_lp[1:10]
@@ -299,25 +361,52 @@ tx <- 2.5* c(1,2,3,4) # ROC time points
 tx
 predM_lp[1:10]
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+
+survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP, 
+               num = sens*prev_test, 
+               den = sens*prev_test + (1-spec)*(1-prev_test),
+               PPV = num/den,
+               Youden = TP- FP,
+               ER01 = sqrt(FP**2 +(1-TP)**2),  # The Closest to (0,1) Criteria (ER) Pepe (2003), Perkins (2006)
+               Liu  =sens*spec,                # Concordance Probability Method (CZ), Liu 2012
+               IU  = abs(sens -auc) + abs(spec -auc) # Index of Union (IU): Unal (2017)
+         ) %>% select(-c(num, den))
  
-survROC_lp %>% print (n=50)
+survROC_lp2 %>% print (n=50)
+
 ```
 
+Save results in a component of a list
+
+```{r step1-res}
+step_sel
+survROC_list[[step_sel]]  <- survROC_lp2
+survROC_lp2 <- NULL
+```
 * Plot Time-dependent ROC every 2.5 years
 
 ```{r surv-roc-plot}
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
 ```
-### ROC for step30
+
+<!--   ------  STEP15  ------ -->
+
+```{r step15-roc, echo = FALSE}
+step_sel <- "step15"
+```
+
+## ROC for `r step_sel`
 
 * source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
 
-```{r surv-roc30}
+```{r surv-roc15}
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
-lmbda_opt <-  lmbda_sel[names(lmbda_sel) == "step30"]
+
+
+lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
 predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
 # predM_lp <- - predM_lp # !!!
 predM_lp[1:10]
@@ -333,16 +422,233 @@ tx <- 2.5* c(1,2,3,4) # ROC time points
 tx
 predM_lp[1:10]
 survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+
+survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP, 
+               num = sens*prev_test, 
+               den = sens*prev_test + (1-spec)*(1-prev_test),
+               PPV = num/den,
+               Youden = TP- FP,
+               ER01 = sqrt(FP**2 +(1-TP)**2),  # The Closest to (0,1) Criteria (ER) Pepe (2003), Perkins (2006)
+               Liu  =sens*spec,                # Concordance Probability Method (CZ), Liu 2012
+               IU  = abs(sens -auc) + abs(spec -auc) # Index of Union (IU): Unal (2017)
+               
+         ) %>% select(-c(num, den))
  
-survROC_lp %>% print (n=50)
+survROC_lp2 %>% print (n=50)
+
 ```
 
+Save results in a component of a list
+
+```{r step15-res}
+step_sel
+survROC_list[[step_sel]]  <- survROC_lp2
+survROC_lp2 <- NULL
+```
 * Plot Time-dependent ROC every 2.5 years
 
-```{r surv-roc-plot30}
+```{r surv-roc15-plot}
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
 ```
+<!--   ------  STEP18  ------ -->
+
+```{r step18-roc, echo = FALSE}
+step_sel <- "step18"
+```
+
+## ROC for `r step_sel`
+
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
+
+```{r surv-roc18}
+dataM_test <- test_data
+dataM_test$predM_lp <- NULL
+
+
+lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+# predM_lp <- - predM_lp # !!!
+predM_lp[1:10]
+summary(predM_lp)
+
+                
+## Augment `dataM_test` with linear predictor
+ dataM_test$predM_lp <- predM_lp
+
+# Evaluate every 2.5 years
+ 
+tx <- 2.5* c(1,2,3,4) # ROC time points
+tx
+predM_lp[1:10]
+survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+
+survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP, 
+               num = sens*prev_test, 
+               den = sens*prev_test + (1-spec)*(1-prev_test),
+               PPV = num/den,
+               Youden = TP- FP,
+               ER01 = sqrt(FP**2 +(1-TP)**2),  # The Closest to (0,1) Criteria (ER) Pepe (2003), Perkins (2006)
+               Liu  =sens*spec,                # Concordance Probability Method (CZ), Liu 2012
+               IU  = abs(sens -auc) + abs(spec -auc) # Index of Union (IU): Unal (2017)
+         ) %>% select(-c(num, den))
+ 
+survROC_lp2 %>% print (n=50)
+
+```
+
+Save results in a component of a list
+
+```{r step18-res}
+step_sel
+survROC_list[[step_sel]]  <- survROC_lp2
+survROC_lp2 <- NULL
+```
+* Plot Time-dependent ROC every 2.5 years
+
+```{r surv-roc18-plot}
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp) 
+```
+
+<!--   ------  STEP24  ------ -->
+
+```{r step24-roc, echo = FALSE}
+step_sel <- "step24"
+```
+
+## ROC for `r step_sel`
+
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
+
+```{r surv-roc24}
+dataM_test <- test_data
+dataM_test$predM_lp <- NULL
+
+lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+# predM_lp <- - predM_lp # !!!
+predM_lp[1:10]
+summary(predM_lp)
+
+                
+## Augment `dataM_test` with linear predictor
+ dataM_test$predM_lp <- predM_lp
+
+# Evaluate every 2.5 years
+ 
+tx <- 2.5* c(1,2,3,4) # ROC time points
+tx
+predM_lp[1:10]
+survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+
+survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP, 
+               num = sens*prev_test, 
+               den = sens*prev_test + (1-spec)*(1-prev_test),
+               PPV = num/den,
+               Youden = TP- FP,
+               ER01 = sqrt(FP**2 +(1-TP)**2),  # The Closest to (0,1) Criteria (ER) Pepe (2003), Perkins (2006)
+               Liu  =sens*spec,                # Concordance Probability Method (CZ), Liu 2012
+               IU  = abs(sens -auc) + abs(spec -auc) # Index of Union (IU): Unal (2017)
+
+         ) %>% select(-c(num, den))
+ 
+survROC_lp2 %>% print (n=50)
+
+```
+
+Save results in a component of a list
+
+```{r step24-res}
+step_sel
+survROC_list[[step_sel]]  <- survROC_lp2
+survROC_lp2 <- NULL
+```
+* Plot Time-dependent ROC every 2.5 years
+
+```{r surv-roc24-plot}
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp) 
+```
+
+
+
+<!--   ------  STEP31  ------ -->
+
+```{r step31-roc, echo = FALSE}
+step_sel <- "step31"
+```
+
+## ROC for `r step_sel`
+
+
+* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
+
+
+```{r surv-roc31}
+dataM_test <- test_data
+dataM_test$predM_lp <- NULL
+lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
+predM_lp <- as.vector(predict(pfit_aopt, newx = x_test, type = "link", s = lmbda_opt))
+# predM_lp <- - predM_lp # !!!
+predM_lp[1:10]
+summary(predM_lp)
+
+                
+## Augment `dataM_test` with linear predictor
+ dataM_test$predM_lp <- predM_lp
+
+# Evaluate every 2.5 years
+ 
+tx <- 2.5* c(1,2,3,4) # ROC time points
+tx
+predM_lp[1:10]
+survROC_lp <- create_survivalROC_data(tx, dataM_test, predM_lp)
+survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP, 
+               num = sens*prev_test, 
+               den = sens*prev_test + (1-spec)*(1-prev_test),
+               PPV = num/den,
+               Youden = TP- FP,
+               ER01 = sqrt(FP**2 +(1-TP)**2),  # The Closest to (0,1) Criteria (ER) Pepe (2003), Perkins (2006)
+               Liu  =sens*spec,                # Concordance Probability Method (CZ), Liu 2012
+               IU  = abs(sens -auc) + abs(spec -auc) # Index of Union (IU): Unal (2017)
+
+         ) %>% select(-c(num, den))
+ 
+survROC_lp2 %>% print (n=50)
+
+```
+
+Save results in a component of a list
+
+```{r step31-res}
+step_sel
+survROC_list[[step_sel]]  <- survROC_lp2
+survROC_lp2 <- NULL
+```
+
+
+
+* Plot Time-dependent ROC every 2.5 years
+
+```{r surv-roc-plot31}
+## Plot Time-dependent ROC every 2.5 years
+plot_timedep_ROC(survROC_lp) 
+```
+
+Save results in Excel file
+
+```{save-xlsx}
+library(writexl)
+str(survROC_list)
+xlsxf <- "survROC_list.xlsx"
+xlsxp <- paste0("./validation_save/", xlsxf)
+write_xlsx(survROC_list, xlsxp)
+
+```
+
 
 
 ```{r exit0, include=FALSE}
