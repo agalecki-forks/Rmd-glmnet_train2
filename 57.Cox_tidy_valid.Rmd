@@ -640,7 +640,7 @@ plot_timedep_ROC(survROC_lp)
 
 Save results in Excel file
 
-```{save-xlsx}
+```{r save-xlsx}
 library(writexl)
 str(survROC_list)
 xlsxf <- "survROC_list.xlsx"
