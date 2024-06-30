@@ -256,6 +256,7 @@ lmbda_sel <-lmbda[sel]
 names(lmbda_sel) <- nms
 lmbda_sel
 lmbda_opt <- lmbda_sel[1]
+lmbda_opt
 ```
 
 # Model Performance 
@@ -293,6 +294,24 @@ length(Cindex_lmbda)
 Cindex_lmbda[sel] 
 
 #Cindex(predM_lp, ySurv_test)   # For optimal lambda
+```
+
+C-index (with std err) for selected lambdas 
+
+```{r Cindex1}
+cindex_sel <- sapply(sel, FUN = function(sx){
+   pred1 <- predM_lpmtx[, sx]
+   pred1m <- -pred1
+   obj   <- concordance(ySurv_test ~ pred1m)
+   cidx  <- obj$concordance
+   stder <- sqrt(obj$var)
+   res <- tibble(sel = sx, cindex= cidx, stderr = stder)
+   return(res)
+})
+
+cidx <- t(cindex_sel)
+rownames(cidx) <- names(Cindex_lmbda[sel]) 
+cidx
 ```
 
 # Time-dependent ROC for various `step` values
@@ -648,6 +667,58 @@ xlsxp <- paste0("./validation_save/", xlsxf)
 write_xlsx(survROC_list, xlsxp)
 
 ```
+
+# Model lambda min versus lambda_1se
+
+Comparison of lambda_min versus lambda.1se models
+
+
+## C-index
+
+```{r c_index_diff-function}
+library(boot)
+
+c_index_diff <- function(data, indices) {
+  # Create the bootstrapped dataset
+  data_boot <- data[indices,]
+  x_boot <- x_test[indices,] # x
+  
+  # Get the survival object for the bootstrapped data
+  surv_obj_boot <- with(data_boot, Surv(time, status))
+  
+  # Generate predictions for each model on this bootstrapped dataset
+  pred_lambda_min_boot <- predict(cvfit, newx = x_boot, s = 'lambda.min', type = 'response')
+  pred_lambda_1se_boot <- predict(cvfit, newx = x_boot, s = 'lambda.1se', type = 'response')
+  
+  # Calculate C-index for each set of predictions
+  #- c_index_min_boot <- concordance(Surv(time, status) ~ pred_lambda_min_boot, data = data_boot)$concordance
+  #- c_index_1se_boot <- concordance(Surv(time, status) ~ pred_lambda_1se_boot, data = data_boot)$concordance
+
+  c_index_min_boot <- concordance(Surv(time, status) ~ pred_lambda_min_boot, data = data_boot)$concordance
+  c_index_1se_boot <- concordance(Surv(time, status) ~ pred_lambda_1se_boot, data = data_boot)$concordance
+  
+  # Return the difference
+  return(c_index_min_boot - c_index_1se_boot)
+}
+```
+
+
+```{r c-index-diff-bootstrap}
+# Bootstrapping with the 'boot' function
+set.seed(123) # For reproducibility
+boot_results <- boot(test_data, statistic = c_index_diff, R = 1000) # Use more iterations (R) for more stable estimates
+
+
+boot_est <- mean(boot_results$t)
+boot_est 
+
+# Calculate the confidence interval from the bootstrap results
+boot_ci <- boot.ci(boot_results, type = "perc") # Percentile CI; could also consider 'bca' for bias-corrected accelerated CI
+
+print(boot_ci)
+```
+
+
 
 
 
