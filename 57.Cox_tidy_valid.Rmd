@@ -256,6 +256,7 @@ lmbda_sel <-lmbda[sel]
 names(lmbda_sel) <- nms
 lmbda_sel
 lmbda_opt <- lmbda_sel[1]
+lmbda_opt
 ```
 
 # Model Performance 
@@ -293,6 +294,24 @@ length(Cindex_lmbda)
 Cindex_lmbda[sel] 
 
 #Cindex(predM_lp, ySurv_test)   # For optimal lambda
+```
+
+C-index (with std err) for selected lambdas 
+
+```{r Cindex1}
+cindex_sel <- sapply(sel, FUN = function(sx){
+   pred1 <- predM_lpmtx[, sx]
+   pred1m <- -pred1
+   obj   <- concordance(ySurv_test ~ pred1m)
+   cidx  <- obj$concordance
+   stder <- sqrt(obj$var)
+   res <- tibble(sel = sx, cindex= cidx, stderr = stder)
+   return(res)
+})
+
+cidx <- t(cindex_sel)
+rownames(cidx) <- names(Cindex_lmbda[sel]) 
+cidx
 ```
 
 # Time-dependent ROC for various `step` values
@@ -648,6 +667,131 @@ xlsxp <- paste0("./validation_save/", xlsxf)
 write_xlsx(survROC_list, xlsxp)
 
 ```
+
+# Model lambda min versus lambda_1se
+
+Comparison of lambda_min versus lambda.1se models
+
+
+## C-index
+
+```{r c_index_diff-function}
+library(boot)
+
+c_index_diff <- function(data, indices) {
+  # Create the bootstrapped dataset
+  data_boot <- data[indices,]
+  x_boot <- x_test[indices,] # x
+  
+  # Get the survival object for the bootstrapped data
+  surv_obj_boot <- with(data_boot, Surv(time, status))
+  
+  # Generate predictions for each model on this bootstrapped dataset
+  pred_lambda_min_boot <- predict(cvfit, newx = x_boot, s = 'lambda.min', type = 'response')
+  pred_lambda_1se_boot <- predict(cvfit, newx = x_boot, s = 'lambda.1se', type = 'response')
+  
+  # Calculate C-index for each set of predictions
+  #- c_index_min_boot <- concordance(Surv(time, status) ~ pred_lambda_min_boot, data = data_boot)$concordance
+  #- c_index_1se_boot <- concordance(Surv(time, status) ~ pred_lambda_1se_boot, data = data_boot)$concordance
+
+  c_index_min_boot <- concordance(Surv(time, status) ~ pred_lambda_min_boot, data = data_boot)$concordance
+  c_index_1se_boot <- concordance(Surv(time, status) ~ pred_lambda_1se_boot, data = data_boot)$concordance
+  
+  # Return the difference
+  return(c_index_min_boot - c_index_1se_boot)
+}
+```
+
+
+```{r c-index-diff-bootstrap}
+# Bootstrapping with the 'boot' function
+set.seed(123) # For reproducibility
+boot_results <- boot(test_data, statistic = c_index_diff, R = 1000) # Use more iterations (R) for more stable estimates
+
+
+boot_est <- mean(boot_results$t)
+boot_est 
+
+# Calculate the confidence interval from the bootstrap results
+boot_ci_perc <- boot.ci(boot_results, type = "perc") # Percentile CI; could also consider 'bca' for bias-corrected accelerated CI
+boot_ci_bca <- boot.ci(boot_results, type = "bca") # Percentile CI; could also consider 'bca' for bias-corrected accelerated CI
+
+print(boot_ci_perc)
+print(boot_ci_bca)
+```
+
+## Minus 2LL
+
+Minus 2LL
+
+
+```{r minus-2ll}
+# Extract the index of lambda.min and lambda.1se from the cv.fit object
+lambda_min_index <- which(cvfit$lambda == cvfit$lambda.min)
+lambda_1se_index <- which(cvfit$lambda == cvfit$lambda.1se)
+
+# Extract the penalized log partial likelihood for lambda.min and lambda.1se
+log_likelihood_min <- cvfit$cvm[lambda_min_index]
+log_likelihood_1se <- cvfit$cvm[lambda_1se_index]
+
+# Compute -2 Log-likelihood
+minus_2LL_min <- -2 * log_likelihood_min
+minus_2LL_1se <- -2 * log_likelihood_1se
+
+# Print the values
+cat("-2 Log Likelihood for lambda.min model:", minus_2LL_min, "\n")
+cat("-2 Log Likelihood for lambda.1se model:", minus_2LL_1se, "\n")
+```
+
+## AICc
+
+AICc stands for the Akaike Information Criterion corrected for small sample sizes.
+It is a modification of the Akaike Information Criterion (AIC) intended to provide
+a more accurate estimate of a model's quality when the sample size is small 
+relative to the number of parameters in the model.
+
+
+```{r AICc-compare}
+# Extract coefficients and calculate degrees of freedom for lambda.min and lambda.1se
+
+coef_min <- coef(cvfit, s = "lambda.min", exact = TRUE)[,1]
+coef_1se <- coef(cvfit, s = "lambda.1se", exact = TRUE)[,1]
+
+coef_min
+coef_1se
+
+linear_predictors_min <- as.matrix(x_test) %*% coef_min ## [-1]  # Drop the intercept term if present
+linear_predictors_1se <- as.matrix(x_test) %*% coef_1se
+
+test_data$lp_min <- linear_predictors_min
+test_data$lp_1se <- linear_predictors_1se
+
+cox_model_min <- coxph(formula = ySurv_test ~ 1 + offset(lp_min), data = test_data, x = TRUE, y = TRUE)
+cox_model_1se <- coxph(formula = ySurv_test ~ 1 + offset(lp_1se), data = test_data, x = TRUE, y = TRUE)
+
+                       
+df_min <- sum(coef_min != 0)
+df_1se <- sum(coef_1se != 0)
+
+# Calculate the log partial likelihood (without the penalty term) for lambda.min and lambda.1se
+loglik_min <- logLik(cox_model_min)
+loglik_1se <- logLik(cox_model_1se)
+
+# Sample size
+n <- nrow(x_test)
+
+# Compute AIC and AICc using effective degrees of freedom
+aic_min <- -2 * loglik_min + 2 * df_min
+aic_1se <- -2 * loglik_1se + 2 * df_1se
+
+aicc_min <- aic_min + (2 * df_min * (df_min + 1)) / (n - df_min - 1)
+aicc_1se <- aic_1se + (2 * df_1se * (df_1se + 1)) / (n - df_1se - 1)
+
+# Print the AICc values
+cat("AICc for lambda.min model:", aicc_min, "\n")
+cat("AICc for lambda.1se model:", aicc_1se, "\n")
+```
+
 
 
 
