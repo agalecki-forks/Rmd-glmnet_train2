@@ -6,6 +6,7 @@
 *.html
 *.Rdata
 *.xlsx
+commit_history.txt
 
 # .Rprog
 *.Rprog
