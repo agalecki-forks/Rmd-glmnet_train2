@@ -1,0 +1,90 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+source("20.setup_npxdata.txt")
+xVars  = c(clin_vars3, prot_npx)
+cform0 = paste(xVars, sep ="", collapse ="+" )
+cform  = paste0("Crisk(event_time, event_type) ~", cform0)
+```
+
+```{r fastCrrp-fit}
+# library(fastcmprsk)
+set.seed(123)
+
+# Fit penalized Fine-Gray model with LASSO
+fit <- fastCrrp(
+  formula = as.formula(cform), # Crisk(time, status) ~ x1 + x2 + x3,
+  data = train_data_all, ## data,
+  penalty = "LASSO", # ENET, RIDGE
+  lambda = NULL,  # Automatic lambda sequence
+  lambda.min.ratio = 0.001,
+  nlambda = 25,
+  standardize = TRUE,
+  getBreslowJumps = TRUE,
+  eps = 1e-06,
+  max.iter = 1000,
+  alpha = 1  # Ensure LASSO penalization
+)
+```
+
+```{r fit-check}
+ 
+range(fit$logLik)
+fit$lambda.path
+table(train_data_all$event_type)
+nrow(train_data_all)
+```
+
+
+Results:
+
+```{r Extract-and-display-results}
+# Extract and display results
+# Coefficients matrix
+coef_matrix <- matrix(fit$coef, nrow = length(xVars), ncol = 25)
+rownames(coef_matrix) <- xVars   # c("x1", "x2", "x3")
+colnames(coef_matrix) <- paste0("lambda_", fit$lambda.path)
+# Check non-zero coefficients
+ print(colSums(coef_matrix != 0))
+
+# Compute AIC for each lambda
+aic_values <- sapply(seq_along(fit$logLik), function(i) {
+  loglik <- fit$logLik[i]
+  n_param <- sum(coef_matrix[, i] != 0)
+  -2 * loglik + 2 * n_param
+})
+
+# Find best lambda
+best_lambda_idx <- which.min(aic_values)
+best_lambda <- fit$lambda.path[best_lambda_idx]
+best_coefs <- coef_matrix[, best_lambda_idx]
+
+# Print results
+cat("Best lambda:", best_lambda, "\n")
+cat("Coefficients at best lambda:\n")
+print(best_coefs)
+
+# Check non-zero coefficients
+non_zero <- best_coefs != 0
+cat("Non-zero coefficients:\n")
+print(best_coefs[non_zero])
+
+# Try alternative output methods
+print(fit)  # May show coefficients
+coef(fit)   # Direct coefficient extraction
+summary(fit)  # Model metadata
+```

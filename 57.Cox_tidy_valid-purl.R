@@ -1,18 +1,8 @@
----
-title: 'Validation of Cox Model M3'
-author: "Chunyi Wu and Andrzej Galecki"
-date: "`r format(Sys.Date())`"
-output:
-  rmdformats::readthedown:
-    lightbox: true
-    use_bookdown: true
----
-
-```{r setup, include=FALSE}
+## ----setup, include=FALSE-------------------------------------------
 knitr::opts_chunk$set(echo = TRUE, comment="#>")
-```
 
-```{r data, include = FALSE}
+
+## ----data, include = FALSE------------------------------------------
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
 library(pacman)
 
@@ -34,95 +24,57 @@ pacman::p_load(
   glmnetUtils,  #Glmnet models for multiple alpha
   coefplot,     # Plotting Model Coefficients
   survival,     #survival model 
-  survminer,
-  survIDINRI,
-  penAFT,       #??? utilsag may require it
   tidymodels,   #for modeling and machine learning using tidyverse principles
   survivalROC   #survivalROC
   )
-```
 
-```{r utilsag-version-2test, include = FALSE}
+
+## ----utilsag-version-2test, include = FALSE-------------------------
 uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
-```
 
-```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
-```
 
-This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
-as requested.
+## ----install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE----
 
-Input info:
+## ----utilsag-info, include = FALSE----------------------------------
+install.packages("penAFT")
+.libPaths()
+uag_path <- system.file(package = "utilsag")
+uag_ver  <- if (uag_path != ""){
+     as.character(packageVersion("utilsag"))} else ""
 
-```{r utilsag-lodaed}
+
+## ----install-tested-utilsag, include=FALSE--------------------------
+uag_ref0 <- paste0("version-", uag_ver0)
+
+if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+
+if (uag_ver != uag_ver0){
+   devtools::install_github("agalecki/utilsag", ref = uag_ref0)
+}
+
+
+
+## ----utilsag-lodaed-------------------------------------------------
 library(utilsag)
 mod_lbl <-"M3"
 alphax <- 0.25
 survSplit_cut <- 10
-survival_time <- c(5,10)
-validation_dtname <- "data_validation" # Name of an Excel file stored in ./validation_input folder with data used for validation
-```
-
-Output:
-
-* `survROC_list.xlsx` stored in `./Validation_save` folder
 
 
 
-# Introduction (`r mod_lbl`)
-
-In this report we consider Cox regression model `r mod_lbl` for the time-to-event `time` variable. 
-
-<!-- Conditonal text inserted -->  
-`r if(mod_lbl == "M0"){
-"Model M0 contains baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
-}`
-
-`r if(mod_lbl == "M1"){
-"Model M1 contains 21 proteins as candidate predictors."
-}`
-
-
-`r if(mod_lbl == "M2"){
-"Model M2 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors"
-}`
-
-`r if(mod_lbl == "M3"){
-"Model M3 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR as candidate predictors. Clinical covariates
-are forced into the model."
-}`
-
-<!-- Conditonal text ends --> 
-
-Notes: 
-
-* Originally `time` variable was named `FU_TIME`.  
-* `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
-
-
-## Test data prep
-
-Test data prepared for validation of Cox regression model `r mod_lbl`.        
-
-```{r, prepare-data, echo=TRUE, message=FALSE, warning=FALSE}
+## ----prepare-data, echo=TRUE, message=FALSE, warning=FALSE----------
 #read the data that is stored under the `validation_input` folder
 
 # Change the filename below, if needed
-dtpath <- paste0("./validation_input/", validation_dtname, ".xlsx")
-dt <- read_excel(dtpath)
+dt <- read_excel("./validation_input/data_validation.xlsx")
 
 dt <- dt  %>% rename(time = FU_TIME, status = CASE_CONTROL) %>% 
   mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(time>0) %>% filter(BL_eGFR >= 45)
 
 dim(dt) # Number of rows and columns in the input data
-```
-Variable names used in Cox regression model are stored in the following vectors:
 
-* Proteins in `prot_npx`,
-* Time/status in `surv_vars`,
-* Clinical variables in `clin_vars`
 
-```{r Variables-used-Cox}
+## ----Variables-used-Cox---------------------------------------------
 prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
               "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
               "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
@@ -132,71 +84,47 @@ surv_vars <-  c("time", "status")
 clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
 clin_vars3 <-  c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")
 xvars <- c(clin_vars3, prot_npx)
-```
 
 
-
-Data preparation: 
-
-* Vector `vars`  contains all variable names needed to specify model `r mod_lbl` 
-considered in this document
-
-```{r select-mvars, include =FALSE}
+## ----select-mvars, include =FALSE-----------------------------------
 
 if (mod_lbl == "M0") mvars <- c(surv_vars, clin_vars) 
 if (mod_lbl == "M1") mvars <- c(surv_vars, prot_npx, clin_vars) 
 if (mod_lbl == "M2") mvars <- c(surv_vars, prot_npx, clin_vars) 
 if (mod_lbl == "M3") mvars <- c(surv_vars, prot_npx, clin_vars3) 
 
-```
 
-```{r vars vector}
+
+## ----vars vector----------------------------------------------------
 mvars
-```
 
-* Create dataset `data` that contains subset of all vars needed for the analysis.
 
-```{r data-prep1}
+## ----data-prep1-----------------------------------------------------
 data <- dt  %>% select(all_of(mvars)) 
 dim(data)         
-```
-
-* Keep rows with complete cases in `test_data` dataframe.
 
 
-```{r data-prep2}
+## ----data-prep2-----------------------------------------------------
 # drop any records with NA
 test_data <- data %>% drop_na()    
 
 # Total sample size
 nrow(test_data)
-```
 
-# Preparatory steps
 
-Load fles with info on selected models fitted using traininig data.
-
-```{r load-train-objects}
+## ----load-train-objects---------------------------------------------
 fpath1 <- paste0("./validation_input/17-cox-0.25", mod_lbl, ".Rdata")
 load (file = fpath1, verbose = TRUE)
 #- fpath2 <- paste0("./save/5.Cox_tidy2_", mod_lbl, ".Rdata")
 # save(mod_selected, cva_pfit, mod_all, sel3long, file = fpath2)
 
-```
 
-In this document, we assess performance of the model `r mod_lbl` with the hyperparameters
-listed below:
 
-```{r hyperparametrs-selected}
+## ----hyperparametrs-selected----------------------------------------
 alphax
-```
 
 
-## survSplit
-
-* Create test_data  that is administratively censored at `r survSplit_cut`(time horizon)
-
-```{r survSplit}
+## ----survSplit------------------------------------------------------
 message("survSplit_cut =", survSplit_cut)
 
 temp <- survSplit(Surv(time,  status) ~ ., data = test_data, cut = survSplit_cut,
@@ -206,13 +134,9 @@ test_data15 <- subset(temp, epsd == 1)  # only the first ?? years
 dim(test_data15)
 test_data_saved <- test_data
 test_data    <-  test_data15
-```
 
 
-
-Matrix X and `Surv` object extracted from the `test_data`
-
-```{r x-surv-test}
+## ----x-surv-test----------------------------------------------------
 # - dtx_test <- subset(test_data, select=-c(time,status))
 dtx_test <- test_data %>% select(all_of(xvars)) 
 x_test <- model.matrix(~0 +., data=dtx_test)
@@ -221,15 +145,9 @@ colnames(x_test)
 # Create Surv object
 y_test <- data.matrix(test_data[,c("time", "status")])
 ySurv_test <- survival::Surv(y_test[,"time"], y_test[, "status"])
-```
 
-Auxiliary calculations:
 
-* cens10: Censored obs. Follow-up less than 10 years and event has not occurred
-* Cp10_test: Percent of censored obs (based on cens10)
-* PN10_test: PN is the total number of actual positives
-
-```{r auxx}
+## ----auxx-----------------------------------------------------------
 cens10 <- ifelse(y_test[,"time"]  < 10 & y_test[, "status"]== 0, 1, 0)
 
 table(cens10)
@@ -245,12 +163,9 @@ prev_test <- prev10_test
 
 # Cleanup
 Cp10_test <- prev10_test <- NULL
-```
 
-We extract model fit for a given $\alpha$ and store it in `cv_opt_model` object
-for later use.
 
-```{r cva-glmnet-fit}
+## ----cva-glmnet-fit-------------------------------------------------
 names(res_cvfit)
 cvfit <- res_cvfit$ALLx
 
@@ -267,48 +182,22 @@ names(lmbda_sel) <- nms
 lmbda_sel
 lmbda_opt <- lmbda_sel[1]
 lmbda_opt
-```
-
-# Model Performance 
 
 
-
-
-Predictive performance of a selected model using _standard_ approach.
-
-
-## C-index
-
-Step 1: Linear predictor estimation 
-
-Estimate linear predictor values for the Cox model fitted to test data. 
-
-```{r calc-pred2}
+## ----calc-pred2-----------------------------------------------------
 predM_lpmtx <- predict(pfit_aopt, newx = x_test, type = "link") # Matrix
-```
- 
-
-Step2: C-index calculations
-
-Ref: Harrel Jr, F. E. and Lee, K. L. and Mark, D. B. (1996) Tutorial in biostatistics:
-multivariable prognostic models: issues in developing models, evaluating assumptions 
-and adequacy, and measuring and reducing error, _Statistics in Medicine_, 15, pages 361-387.
 
 
-Note: s0, ... s30 correspond to step1, ... step31
-
-```{r C-index-Mod}
+## ----C-index-Mod----------------------------------------------------
 Cindex_lmbda <- apply(predM_lpmtx, 2, Cindex, y = ySurv_test) # Multiple lambda
 length(Cindex_lmbda)
 
 Cindex_lmbda[sel] 
 
 #Cindex(predM_lp, ySurv_test)   # For optimal lambda
-```
 
-C-index (with std err) for selected lambdas 
 
-```{r Cindex1}
+## ----Cindex1--------------------------------------------------------
 cindex_sel <- sapply(sel, FUN = function(sx){
    pred1 <- predM_lpmtx[, sx]
    pred1m <- -pred1
@@ -322,27 +211,17 @@ cindex_sel <- sapply(sel, FUN = function(sx){
 cidx <- t(cindex_sel)
 rownames(cidx) <- names(Cindex_lmbda[sel]) 
 cidx
-```
-
-# Time-dependent ROC for various `step` values
 
 
-* Initialize list with the results
-
-
-```{r res-list}
+## ----res-list-------------------------------------------------------
 lmbda_sel
 len <- length(lmbda_sel)
 survROC_list <- vector(mode ="list", length = len)
 names(survROC_list) <- names(lmbda_sel)
 str(survROC_list)
-```
 
-## Score (illustration)
 
-Higher `BL_eGFR` -> lower score -> lower hazard of developing ESKD
-
-```{r score-details}
+## ----score-details--------------------------------------------------
 tmp1 <- apply(x_test, 2, mean)
 tmp2 <- tmp1
 tmp2["BL_eGFR"] <- tmp1["BL_eGFR"]+10
@@ -351,25 +230,13 @@ predM_lp <- as.vector(predict(pfit_aopt, newx = x_toy, type = "link", s = lmbda_
 res <-cbind(x_toy[, "BL_eGFR"], predM_lp) 
 colnames(res) <- c("BL_eGFR", "lp_score")
 res
-```
 
-<!--   ------  STEP1  ------ -->
 
-```{r step1-roc, echo = FALSE}
+## ----step1-roc, echo = FALSE----------------------------------------
 step_sel <- "step1"
-```
 
-## ROC for `r step_sel`
 
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
-* Youden W. J. Index for rating diagnostic tests. Cancer. 1950;3(1):32-35
-* https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5470053/
-* Pepe M. S. The Statistical Evaluation of Medical Tests for Classification and Prediction. Vol. 28. Oxford, UK: Oxford University Press; 2003. (Oxford Statistical Science Series)
-* Perkins N. J., Schisterman E. F. The inconsistency of optimal cut-points using two ROC based criteria. American Journal of Epidemiology. 2006;163(7):670-675.
-* Liu X. Classification accuracy and cut point selection. Statistics in Medicine. 2012;31(23):2676-2686. doi: 10.1002/sim.4509
-* Ilkr Unal Defining an Optimal Cut-Point Value in ROC Analysis: An Alternative Approach Comput Math Methods Med. 2017; 2017: 3762651. Published online 2017 May 31.  
-
-```{r surv-roc}
+## ----surv-roc-------------------------------------------------------
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 
@@ -403,34 +270,24 @@ survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP,
  
 survROC_lp2 %>% print (n=50)
 
-```
 
-Save results in a component of a list
 
-```{r step1-res}
+## ----step1-res------------------------------------------------------
 step_sel
 survROC_list[[step_sel]]  <- survROC_lp2
 survROC_lp2 <- NULL
-```
-* Plot Time-dependent ROC every 2.5 years
 
-```{r surv-roc-plot}
+
+## ----surv-roc-plot--------------------------------------------------
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
 
-<!--   ------  STEP15  ------ -->
 
-```{r step15-roc, echo = FALSE}
+## ----step15-roc, echo = FALSE---------------------------------------
 step_sel <- "step15"
-```
-
-## ROC for `r step_sel`
-
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
 
-```{r surv-roc15}
+## ----surv-roc15-----------------------------------------------------
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 
@@ -465,33 +322,24 @@ survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP,
  
 survROC_lp2 %>% print (n=50)
 
-```
 
-Save results in a component of a list
 
-```{r step15-res}
+## ----step15-res-----------------------------------------------------
 step_sel
 survROC_list[[step_sel]]  <- survROC_lp2
 survROC_lp2 <- NULL
-```
-* Plot Time-dependent ROC every 2.5 years
 
-```{r surv-roc15-plot}
+
+## ----surv-roc15-plot------------------------------------------------
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
-<!--   ------  STEP18  ------ -->
 
-```{r step18-roc, echo = FALSE}
+
+## ----step18-roc, echo = FALSE---------------------------------------
 step_sel <- "step18"
-```
-
-## ROC for `r step_sel`
-
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
 
-```{r surv-roc18}
+## ----surv-roc18-----------------------------------------------------
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 
@@ -525,34 +373,24 @@ survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP,
  
 survROC_lp2 %>% print (n=50)
 
-```
 
-Save results in a component of a list
 
-```{r step18-res}
+## ----step18-res-----------------------------------------------------
 step_sel
 survROC_list[[step_sel]]  <- survROC_lp2
 survROC_lp2 <- NULL
-```
-* Plot Time-dependent ROC every 2.5 years
 
-```{r surv-roc18-plot}
+
+## ----surv-roc18-plot------------------------------------------------
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
 
-<!--   ------  STEP24  ------ -->
 
-```{r step24-roc, echo = FALSE}
+## ----step24-roc, echo = FALSE---------------------------------------
 step_sel <- "step24"
-```
-
-## ROC for `r step_sel`
-
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
 
 
-```{r surv-roc24}
+## ----surv-roc24-----------------------------------------------------
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 
@@ -586,37 +424,24 @@ survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP,
  
 survROC_lp2 %>% print (n=50)
 
-```
 
-Save results in a component of a list
 
-```{r step24-res}
+## ----step24-res-----------------------------------------------------
 step_sel
 survROC_list[[step_sel]]  <- survROC_lp2
 survROC_lp2 <- NULL
-```
-* Plot Time-dependent ROC every 2.5 years
 
-```{r surv-roc24-plot}
+
+## ----surv-roc24-plot------------------------------------------------
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
 
 
-
-<!--   ------  STEP31  ------ -->
-
-```{r step31-roc, echo = FALSE}
+## ----step31-roc, echo = FALSE---------------------------------------
 step_sel <- "step31"
-```
-
-## ROC for `r step_sel`
 
 
-* source: (https://datascienceplus.com/time-dependent-roc-for-survival-prediction-models-in-r)
-
-
-```{r surv-roc31}
+## ----surv-roc31-----------------------------------------------------
 dataM_test <- test_data
 dataM_test$predM_lp <- NULL
 lmbda_opt <-  lmbda_sel[names(lmbda_sel) == step_sel]
@@ -648,44 +473,29 @@ survROC_lp2 <- survROC_lp %>% mutate(sens = TP, spec = 1- FP,
  
 survROC_lp2 %>% print (n=50)
 
-```
 
-Save results in a component of a list
 
-```{r step31-res}
+## ----step31-res-----------------------------------------------------
 step_sel
 survROC_list[[step_sel]]  <- survROC_lp2
 survROC_lp2 <- NULL
-```
 
 
-
-* Plot Time-dependent ROC every 2.5 years
-
-```{r surv-roc-plot31}
+## ----surv-roc-plot31------------------------------------------------
 ## Plot Time-dependent ROC every 2.5 years
 plot_timedep_ROC(survROC_lp) 
-```
 
-Save results in Excel file
 
-```{r save-xlsx}
+## ----save-xlsx------------------------------------------------------
 library(writexl)
 str(survROC_list)
 xlsxf <- "survROC_list.xlsx"
 xlsxp <- paste0("./validation_save/", xlsxf)
 write_xlsx(survROC_list, xlsxp)
 
-```
-
-# Model lambda min versus lambda_1se
-
-Comparison of lambda_min versus lambda.1se models
 
 
-## C-index
-
-```{r c_index_diff-function}
+## ----c_index_diff-function------------------------------------------
 library(boot)
 
 c_index_diff <- function(data, indices) {
@@ -710,10 +520,9 @@ c_index_diff <- function(data, indices) {
   # Return the difference
   return(c_index_min_boot - c_index_1se_boot)
 }
-```
 
 
-```{r c-index-diff-bootstrap}
+## ----c-index-diff-bootstrap-----------------------------------------
 # Bootstrapping with the 'boot' function
 set.seed(123) # For reproducibility
 boot_results <- boot(test_data, statistic = c_index_diff, R = 1000) # Use more iterations (R) for more stable estimates
@@ -728,14 +537,9 @@ boot_ci_bca <- boot.ci(boot_results, type = "bca") # Percentile CI; could also c
 
 print(boot_ci_perc)
 print(boot_ci_bca)
-```
-
-## Minus 2LL
-
-Minus 2LL
 
 
-```{r minus-2ll}
+## ----minus-2ll------------------------------------------------------
 # Extract the index of lambda.min and lambda.1se from the cv.fit object
 lambda_min_index <- which(cvfit$lambda == cvfit$lambda.min)
 lambda_1se_index <- which(cvfit$lambda == cvfit$lambda.1se)
@@ -751,17 +555,9 @@ minus_2LL_1se <- -2 * log_likelihood_1se
 # Print the values
 cat("-2 Log Likelihood for lambda.min model:", minus_2LL_min, "\n")
 cat("-2 Log Likelihood for lambda.1se model:", minus_2LL_1se, "\n")
-```
-
-## AICc
-
-AICc stands for the Akaike Information Criterion corrected for small sample sizes.
-It is a modification of the Akaike Information Criterion (AIC) intended to provide
-a more accurate estimate of a model's quality when the sample size is small 
-relative to the number of parameters in the model.
 
 
-```{r AICc-compare}
+## ----AICc-compare---------------------------------------------------
 # Extract coefficients and calculate degrees of freedom for lambda.min and lambda.1se
 
 coef_min <- coef(cvfit, s = "lambda.min", exact = TRUE)[,1]
@@ -800,217 +596,8 @@ aicc_1se <- aic_1se + (2 * df_1se * (df_1se + 1)) / (n - df_1se - 1)
 # Print the AICc values
 cat("AICc for lambda.min model:", aicc_min, "\n")
 cat("AICc for lambda.1se model:", aicc_1se, "\n")
-```
-
-# CJASN Revision (April, 2025)
 
 
-
-Extract `cvfit` object
-
-```{r cvfit-extract}
-cvfit = res_cvfit[["ALLx"]] # cv.glmnet class
-```
-
-## Lambda.min
-
-```{r lambda-min-select}
-
-# Predict risk scores using optimal lambda from cvfit
-lambda_opt <- cvfit$lambda.min
-```
-
-* Concordance
-
-```{r lambda-min-concordance}
-pred_risk <- predict(cvfit, newx = x_test, s = lambda_opt, type = "response")
-
-# 1. Concordance (discrimination)
-pred_risk1 = 1- pred_risk
-concordance <- concordance(ySurv_test ~ pred_risk1)
-cat("Concordance:", concordance$concordance, "\n")
-cat("Standard Error:", concordance$std.err, "\n")
-```
-
-
-* Preparatory steps (lambda_min, time_point=5}
-
-```{r lambda-min-cal-brier-prep5}
-# Calibration and Brier score at specific time point
-# Example: 5-year survival
-time_point <- 5
-
-# Get predicted risk scores (relative hazard)
-lambda_opt <- cvfit$lambda.min
-lin_pred <- predict(cvfit, newx = x_test, s = lambda_opt, type = "link")
-
-# Estimate baseline survival using validation data (since training data is unavailable)
-# Fit a Kaplan-Meier estimator on validation data to approximate baseline survival
-km_fit_val <- survfit(ySurv_test ~ 1)
-base_surv <- summary(km_fit_val, times = time_point)$surv
-
-# Compute survival probabilities: S(t) = S0(t)^exp(linear predictor)
-surv_prob <- base_surv ^ exp(lin_pred)
-
-# Add predicted survival probabilities to validation data
-dt$surv_prob <- as.vector(surv_prob)
-
-# --- Reference Model (Simple Cox Model) ---
-# Use a single predictor or intercept-only model as baseline
-# Replace 'x1' with a key predictor, or use NULL for intercept-only
-ref_cox <- coxph(ySurv_test ~ BL_eGFR + B_HBA1C_PRC + log10_DU_ACR , data = dt)  # Adjust 'x1' or remove for null model
-ref_risk <- predict(ref_cox, newdata = dt, type = "risk")
-## ref_surv_prob <- predict(ref_cox, newdata = dt, type = "risk")
-dt$ref_surv_prob <- base_surv^(1/ ref_risk) ##  - exp(-ref_surv_prob * base_surv)  # Convert to survival probability
-
-
-
-#Stratify validation data into risk quantiles (e.g., 5 groups) based on predicted survival
-dt$risk_group <- cut(dt$surv_prob, 
-                     breaks = quantile(dt$surv_prob, probs = seq(0, 1, by = 0.2)),
-                     include.lowest = TRUE,
-                     labels = c("Q1 (Lowest)", "Q2", "Q3", "Q4", "Q5 (Highest)"))
-
-# Compute observed survival probability for each risk group at time_point
-km_fit <- survfit(ySurv_test ~ risk_group, data = dt)
-obs_surv_summary <- summary(km_fit, times = time_point)
-
-
-# Extract observed survival probabilities and risk group labels
-obs_surv <- obs_surv_summary$surv
-risk_groups <- levels(dt$risk_group)
-
-# Compute mean predicted survival probability for each risk group
-mean_surv_prob <- dt %>%
-  group_by(risk_group) %>%
-  summarise(mean_surv = mean(surv_prob), .groups = "drop") %>%
-  pull(mean_surv)
-```
-
-* Calibration plot at 5 years
-
-```{r lambda-min-Calibration-plot5}
-
-# Calibration plot: Predicted vs. observed survival probability
-plot(mean_surv_prob, obs_surv, 
-     xlab = "Mean Predicted Survival Probability (by Quantile)", 
-     ylab = "Observed Survival Probability", 
-     main = paste("Calibration at", time_point, "years"),
-     xlim = c(0, 1), ylim = c(0, 1),
-     pch = 19, col = "blue")
-abline(0, 1, col = "red", lty = 2)
-text(mean_surv_prob, obs_surv, labels = risk_groups, pos = 3, cex = 0.8)
-```
-
-* Brier score
-
-```{r lambda-min-Brier-score5yrs}
-# Calculate Brier score manually at time_point
-# Brier score = mean((surv_prob - I(t_i > time_point))^2)
-# where I(t_i > time_point) = 1 if individual survives past time_point, 0 otherwise
-dt$surv_indicator <- as.numeric(dt$time > time_point | (dt$time == time_point & dt$status == 0))
-brier_score <- mean((surv_prob - dt$surv_indicator)^2)
-cat("Brier Score at", time_point, "years:", brier_score, "\n")
-
-# Export results
-results_cal_brier_5yr <- data.frame(
-  risk_group = risk_groups,
-  predicted_surv_5yr = mean_surv_prob,
-  observed_surv_5yr = obs_surv,
-  brier_score = brier_score
-)
-write.csv(results_cal_brier_5yr, "cal_brier_lmin5yr.csv", row.names = FALSE)
-```
-
-
-*  Risk stratification
-
-```{r lambda_min-Risk-stratification}
-# 3. Risk stratification (e.g., split into high/low risk groups)
-risk_median <- median(pred_risk)
-risk_group <- ifelse(pred_risk > risk_median, "High", "Low")
-dt$risk_group <- as.factor(risk_group)
-
-# Kaplan-Meier plot for risk groups
-km_risk <- survfit(ySurv_test ~ risk_group, data = dt)
-ggsurvplot(km_risk, data = dt, 
-           pval = TRUE, 
-           title = "Kaplan-Meier by Risk Group",
-           risk.table = TRUE)
-```
-
-
-Net Reclassification Index (NRI) and Integrated Discrimination Improvement (IDI)
-
-* NRI: Measures the net proportion of individuals correctly reclassified into higher or lower risk categories by the cv.glmnet model compared to a reference model (or no model, e.g., baseline risk).
-* IDI: Quantifies the improvement in discrimination by comparing the difference in predicted probabilities between events and non-events.
-
-
-
-Reference Model: Without training data, we'll create a simple Cox model using 
-    a single predictor (or intercept-only model) from the validation data as the baseline for comparison.
-
-
-```{r NRI-NDI-init}
-# --- NRI and IDI ---
-# Define risk categories (e.g., tertiles: low, medium, high)
-risk_cutoffs <- quantile(dt$surv_prob, probs = c(1/3, 2/3))
-dt$risk_cat_new <- cut(dt$surv_prob, 
-                       breaks = c(-Inf, risk_cutoffs, Inf),
-                       labels = c("Low", "Medium", "High"),
-                       include.lowest = TRUE)
-dt$risk_cat_ref <- cut(dt$ref_surv_prob, 
-                       breaks = c(-Inf, risk_cutoffs, Inf),
-                       labels = c("Low", "Medium", "High"),
-include.lowest = TRUE)
-```
-
-```{r NRI-data-create}
-# Prepare data for NRI/IDI
-# survIDINRI requires time, status, and predicted probabilities
-nri_idi_data <- data.frame(
-  time = dt$time,
-  status = dt$status,
-  pred_ref = dt$ref_surv_prob,  # Reference model
-  pred_new = dt$surv_prob     # New model (cv.glmnet)
-)
-```
-
-```{r NRI-results}
-# Define covariates (predictions for reference and new models)
-covs0 <- "pred_ref"  # Reference model predictions
-covs1 <- "pred_new"  # New model predictions
-
-# Compute NRI and IDI
-nri_idi_result <- IDI.INF(
-  indata = nri_idi_data,
-  covs0 = covs0,
-  covs1 = covs1,
-  t0 = time_point,
-  npert = 100,  # Number of bootstrap permutations for confidence intervals
-  seed1 = 1234
-)
-# Extract NRI and IDI
-nri_total <- nri_idi_result$NRI
-nri_event <- nri_idi_result$NRIe
-nri_non_event <- nri_idi_result$NRIn
-idi <- nri_idi_result$IDI
-
-# Print results
-cat("NRI (Total):", nri_total, "\n")
-cat("NRI (Events):", nri_event, "\n")
-cat("NRI (Non-Events):", nri_non_event, "\n")
-cat("IDI:", idi, "\n")
-# --- Export NRI and IDI Results ---
-results_nri_idi <- data.frame(
-  metric = c("Concordance", "Brier Score", "NRI", "IDI"),
-  value = c(concordance_val, brier_score, nri_idi_result$NRI, nri_idi_result$IDI)
-)
-write.csv(results_nri_idi, "nri_idi_results.csv", row.names = FALSE)
-
-```
-
-
-```{r exit0, include=FALSE}
+## ----exit0, include=FALSE-------------------------------------------
 knitr::knit_exit()
-```
+

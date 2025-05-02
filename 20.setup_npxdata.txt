@@ -1,0 +1,171 @@
+# Required object
+# mod_lbl with values "M0", "M1","M2", or "M3"
+# npx_dtname    Name of excel npx data stored in ./Data subfolder
+npx_dtname = "npx_data_example.xlsx"
+
+# Output:
+ 
+# - model_desc (string determined by mod_lbl)
+# - npx_dtpath (string with path) 
+# - npx_dt (raw npx data, selected vars renamed, rows filtered) 
+# - prot_npx (protein var names)
+# - clin_vars ( 5 clinical varnames)
+# - clin_vars3 ( 3 clinical varnames)
+# - xvars <- c(clin_vars3, prot_npx)
+# - mvars  model vars
+# - npx_data  (mvars only)
+# - npx_data_drop_na (complete cases only)
+
+source("./Rfun/all_combinations_crr.R")
+
+# pacman
+if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
+library(pacman)
+
+pacman::p_load(
+  readxl,       # load excel file
+  glmnet,       # Lasso and Elastic-Net Regularized Generalized Linear Models
+  rmdformats,   # rmd formats
+  rmarkdown,    # rmarkdown
+  here,         # File locator
+  skimr,        # get overview of data
+  tidyverse,    # data management + ggplot2 graphics 
+  janitor,      # adding totals and percents to tables
+  flextable,    # format the output table
+  fastcmprsk,   
+  gtsummary,    # calculate summary statistics and format the results
+  sjPlot,       # correlation matrix
+  purrr,        # enhances R functional programming (FP) toolki 
+  tidyr,        #Tools to help to create tidy data
+  ggplot2,      #Plot the results
+  glmnetUtils,  #Glmnet models for multiple alpha
+  coefplot,     # Plotting Model Coefficients
+  survival,     #survival model 
+  survminer,
+  survIDINRI,
+  penAFT,       #??? utilsag may require it
+  tidymodels,   #for modeling and machine learning using tidyverse principles
+  survivalROC   #survivalROC
+  )
+  
+# utilsag
+uag_ver0 <- "0.2.1" # utilsag version tested to execute this script
+
+
+##```{r install-tested-utilsag-child, child = "_install-tested-utilsag.Rmd", include = FALSE}
+## ```
+## install.packages("penAFT")
+if (!require("penAFT", quietly = TRUE)) install.packages("penAFT")
+  
+.libPaths()
+uag_path <- system.file(package = "utilsag")
+uag_ver  <- if (uag_path != ""){
+     as.character(packageVersion("utilsag"))} else ""
+
+uag_ref0 <- paste0("version-", uag_ver0)
+
+if("utilsag" %in% (.packages())) detach("package:utilsag", unload=TRUE)
+
+if (uag_ver != uag_ver0){
+   devtools::install_github("agalecki/utilsag", ref = uag_ref0)
+}
+
+#This script was executed using `utilsag` package stored in Github branch *`r uag_ref0`*,
+# as requested.
+library(utilsag)
+
+
+get_model_desc <- function(mod_lbl) {
+  switch(mod_lbl,
+         "M0" = "Model M0 contains baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors",
+         "M1" = "Model M1 contains 21 proteins as candidate predictors.",
+         "M2" = "Model M2 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR, SEX, and AGE_TL(Baseline Age) as candidate predictors",
+         "M3" = "Model M3 contains 21 proteins and Baseline HbA1c, log10(ACR), BL_eGFR as candidate predictors. Clinical covariates
+are forced into the model.",
+         "Unknown Module")  # Default case
+}
+
+model_desc = get_model_desc(mod_lbl)
+
+
+# Originally `time` variable was named `FU_TIME`.  
+# `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
+#read the data that is stored under the `validation_input` folder
+
+
+
+# Change the filename below, if needed
+
+npx_dtpath <- paste0("./Data/", npx_dtname)
+npx_data_orig <- read_excel(npx_dtpath)
+
+npx_data_orig <- npx_data_orig  %>% 
+  mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(FU_TIME>0) %>% filter(BL_eGFR >= 45)
+  
+npx_dt = npx_data_orig %>% rename(time = FU_TIME, status = CASE_CONTROL, time_death =FU_TIME_Death, death = Death ) 
+
+# truncate time_death
+tm_death <- npx_dt$time_death
+
+npx_dt$time_death = ifelse(is.na(tm_death), survSplit_cut,tm_death)
+npx_dt$time_death = ifelse(npx_dt$time_death > survSplit_cut,survSplit_cut, npx_dt$time_death)
+npx_dt$death      = ifelse(npx_dt$time_death == survSplit_cut, 0, 1)
+
+# Create event_type and event_time variables for competing risks
+npx_dt$event_type <- ifelse(npx_dt$status == 1, 1,          # ESKD occurred
+                            ifelse(npx_dt$death == 1, 2,    # Death occurred (no ESKD)
+                                   0))                      # Censored
+
+npx_dt$event_time <- ifelse(npx_dt$status == 1, npx_dt$time,   # Time to ESKD
+                            npx_dt$time_death)                 # Time to death or censoring
+
+# Create composite outcome variables
+npx_dt$composite_status <- ifelse(npx_dt$status == 1 | npx_dt$death == 1, 1, 0)  # 1 = ESKD or death, 0 = censored
+
+npx_dt$composite_time <- ifelse(npx_dt$status == 1, npx_dt$time,                 # Time to ESKD if ESKD occurred
+                                npx_dt$time_death)                               # Time to death or censoring otherwise
+
+
+# dim(npx_dt) # Number of rows and columns in the input data
+
+#   Variables-used-Cox
+prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
+              "TNFRSF10A.npx","LAYN.npx","PVRL4.npx", "EDA2R.npx","TNFRSF4.npx",
+              "GFR_alpha_1_npx","TNF.R1.npx","PI3_npx", "EFNA4.npx","TNF.R2.npx" ,
+              "DLL1.npx", "TNFRSF6B.npx", "CD160.npx", "EPHA2.npx","RELT.npx",
+              "LTBR.npx") 
+clin_vars <- c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR","SEX","AGE_TL")
+clin_vars3 <-  c("BL_eGFR","B_HBA1C_PRC","log10_DU_ACR")
+xvars <- c(clin_vars3, prot_npx)
+ surv_vars <-  c("time", "status")
+ surv_vars_add <- c("time_death", "death", "composite_time", "composite_status", "event_time", "event_type" ) # Added April 2025
+ surv_vars_all <- c(surv_vars, surv_vars_add)
+
+# Create mvars. surv_vars defined in `*-run.R
+if (mod_lbl == "M0") mvars <- c(surv_vars, clin_vars) 
+if (mod_lbl == "M1") mvars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M2") mvars <- c(surv_vars, prot_npx, clin_vars) 
+if (mod_lbl == "M3") {
+    mvars <- c(surv_vars, prot_npx, clin_vars3) 
+    mvars_all <- c("INDEX", surv_vars_add, mvars)
+    }
+
+npx_data <- npx_dt  %>% select(all_of(mvars)) # omit?
+
+npx_data_all <- npx_dt  %>% select(all_of(mvars_all)) # added
+
+
+train_npx_data <- npx_data %>% drop_na()      # omit? 
+train_npx_data_all <- npx_data_all %>% drop_na()  # added 
+
+
+# Create data that is censored at `r survSplit_cut` years (prediction horizon)
+# extra varibles are created
+temp <- survSplit(Surv(time,  status) ~ ., data = train_npx_data, cut = survSplit_cut, #
+                  episode = "epsd")
+npxdata <- subset(temp, epsd == 1)  # only the first row is kept
+
+# extra varibles are created
+temp_all <- survSplit(Surv(time,  status) ~ ., data = train_npx_data_all, cut = survSplit_cut, #
+                  episode = "epsd")
+npxdata_all <- subset(temp_all, epsd == 1)  # only the first row is kept

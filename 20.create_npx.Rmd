@@ -1,0 +1,132 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+source("./Rfun/summarize_variable.R")
+source("./Rfun/summarize_data.R")
+source("./Rfun/check_survival_consistency2.R")
+source("20.setup_npxdata.txt")
+
+```
+
+<!-- Section: Original NPX data -->
+
+Script bnm executed by `r username`.
+
+# Original NPX Data: `r "npx_data_orig"`
+
+* Original NPX Data path: `r npx_dtpath`
+
+* `r model_desc`
+
+
+```{r orig-summary-stats, echo=FALSE}
+summary_stats = summarize_data(npx_data_orig)
+knitr::kable(summary_stats, caption = "Summary Statistics for original NPX data")
+```
+
+
+Script bnm executed by `r username`.
+
+* Original NPX Data path: `r npx_dtpath`
+
+* `r model_desc`
+
+<!-- Check surv vars -->
+
+* Checking for missing values in time vars. Data `tvars_sel` should be empty 
+```{r check-surv-vars-orig}
+tvars_sel = npx_data_orig %>% 
+  select(c(INDEX,FU_TIME,  CASE_CONTROL, FU_TIME_Death, Death))
+sel = complete.cases(tvars_sel)
+tvars_sel[!sel, ]
+
+```
+
+```{r check2-npx_data_orig}
+
+miss_res1 =check_survival_consistency2( npx_data_orig, 
+                          index_var = "INDEX", 
+                          time_var = "FU_TIME", 
+                          status_var = "CASE_CONTROL", 
+                          time_death_var = "FU_TIME_Death", 
+                          death_var = "Death")
+#summ1_list= miss_res1$summary
+#miss_summ1 <- data.frame(Value = unlist(summ1_list))
+#miss_summ1
+#miss_res1$issues
+miss_res1$problematic_rows
+```
+
+
+```{r check2-npxdata_all}
+                          
+miss_res2 =check_survival_consistency2( npxdata_all, 
+                          index_var = "INDEX", 
+                          time_var = "time", 
+                          status_var = "status", 
+                          time_death_var = "time_death", 
+                          death_var = "death")
+#summ2_list= miss_res2$summary
+#miss_summ2 <- data.frame(Value = unlist(summ2_list))
+#miss_summ2
+
+#miss_res2$issues
+miss_res2$problematic_rows
+```
+
+<!--  Section: NPX `npx_dt2` data -->
+
+# `npx_dt2` data
+
+* Filter BL_eGFR >= 45
+* Vars renamed: time = FU_TIME, status = CASE_CONTROL, time_death = FU_TIME_Death, death = Death
+
+```{r npx-dt-summary-stats-npx-dt, echo=FALSE}
+npx_dt2 = npx_dt %>% select(-c(time_death, death,event_time,event_type, composite_time, composite_status ))
+summary_stats = summarize_data(npx_dt2)
+knitr::kable(summary_stats, caption = "Summary Statistics for npx_dt2 data")
+```
+
+<!--  Section: NPX npxdata_all data -->
+
+# `npxdata_all` data
+
+* Filter BL_eGFR >= 45
+* Vars renamed: time = FU_TIME, status = CASE_CONTROL, time_death = FU_TIME_Death, death = Death
+* Var: time_death if missing then replaced with `r paste0("survSplit_cut=",survSplit_cut)` 
+* Vars:  created event_time,event_type, composite_time, composite_type
+
+```{r npx-dt-summary-stats-npx-dt_all, echo=FALSE}
+summary_stats = summarize_data(npxdata_all)
+knitr::kable(summary_stats, caption = "Summary Statistics for npxdata_all data")
+```
+
+<!-- Time vars -->
+
+```{r tvars_dt}
+if (username == "agalecki"){
+  tvars_dt0 = npxdata_all %>% select(c(INDEX,time, status, time_death, death, event_time,event_type, composite_time, 
+          composite_status))
+  tvars_dt = tvars_dt0 %>% rename(tmdth = time_death, etime= event_time, dth =death, cmp_tm = composite_time, cmp_stt= composite_status,
+     stt=status, etp = event_type)       
+  cols_to_round <- c("time", "tmdth", "etime","cmp_tm")
+  tvars_dt[, cols_to_round] <- lapply(tvars_dt[, cols_to_round], round, digits = 2)
+
+  print(tvars_dt)
+}
+```
