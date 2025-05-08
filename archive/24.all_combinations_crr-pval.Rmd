@@ -1,0 +1,117 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+#source("./Rfun/summarize_variable.R")
+#source("./Rfun/summarize_data.R")
+#source("./Rfun/check_survival_consistency2.R")
+#source("./Rfun/get_newdata_linear_predictor.R")
+## source("./Rfun/calculate_survival_probabilities.R")
+source("./Rfun/crr_fg_train.R")
+source("./Rfun/cox_glmnet_train.R")
+
+#-- source("all_combinations_crr-run.R")
+source("./Rfun/all_combinations_crr.R")
+source("20.setup_npxdata.txt")
+
+```
+
+
+###
+
+```{r big-chunk}
+# Data checks
+cat("Event counts:\n")
+print(table(npxdata_all$event_type))
+cat("Number of observations:", nrow(npxdata_all), "\n")
+cat("Missing values:\n")
+print(colSums(is.na(npxdata_all)))
+cat("Non-positive times:\n")
+print(sum(npxdata_all$time <= 0))
+cor_matrix <- cor(npxdata_all[, prot_npx], use = "pairwise.complete.obs")
+cat("Max correlation:", max(abs(cor_matrix[upper.tri(cor_matrix)])), "\n")
+###
+
+
+# Define covariates and xin
+# covariates <- prot_npx # paste0("x", 2:24)
+covariates <- c("KIM1.npx", "SYND1.npx",   
+  "WFDC2.npx", "PVRL4.npx" ,"TNF.R2.npx" ,"DLL1.npx","RELT.npx", "LTBR.npx")
+
+xin <- clin_vars3 # c("x1")
+
+# Run all combinations
+result <- all_combinations_crr(
+  time = "time",
+  status = "event_type",
+  covariates = covariates,
+  xin = xin,
+  data = npxdata_all,
+  criterion = "pval",
+  pval_threshold = 0.1,
+  addedx = 3,
+  best = 8
+)
+
+# Print results
+cat("\nTop models summary:\n")
+for (i in 1:length(result$top_models)) {
+  cat("Model", i, ": Variables =", paste(result$top_models[[i]]$variables, collapse = ", "), 
+      ", pval =", result$top_models[[i]]$criterion, "\n")
+}
+if (length(result$non_converged) > 0) {
+  cat("Non-converged models:", paste(result$non_converged, collapse = "; "), "\n")
+}
+
+# Extract best model and variables
+best_model <- result$top_models[[1]]$model
+summary(best_model)
+best_vars <- result$top_models[[1]]$variables
+
+# Create newdata with one row
+newdata <- data.frame(matrix(NA, nrow = 1, ncol = length(best_vars)))
+colnames(newdata) <- best_vars
+
+# Calculate mean for numeric variables, mode for factors
+if (length(best_vars) > 0) {
+  for (var in best_vars) {
+    if (var %in% names(npxdata_all)) {
+      if (is.numeric(npxdata_all[[var]])) {
+        # Set to mean for numeric variables
+        newdata[1, var] <- mean(npxdata_all[[var]], na.rm = TRUE)
+      } else if (is.factor(npxdata_all[[var]])) {
+        # Set to most frequent level (mode) for factors
+        mode_val <- names(sort(table(npxdata_all[[var]]), decreasing = TRUE))[1]
+        newdata[1, var] <- factor(mode_val, levels = levels(npxdata_all[[var]]))
+      } else {
+        warning(paste("Variable", var, "is neither numeric nor factor. Setting to NA."))
+        newdata[1, var] <- NA
+      }
+    } else {
+      warning(paste("Variable", var, "not found in npxdata_all. Setting to NA."))
+      newdata[1, var] <- NA
+    }
+  }
+}
+
+# Prepare covariates and predict CIF
+cov1 <- as.matrix(newdata)
+pred <- predict(best_model, cov1 = cov1, times = seq(0, max(npxdata_all$time), by = 0.1))
+
+# Plot CIF
+plot(pred, xlab = "Time", ylab = "Cumulative Incidence", main = "CIF for Best Model (Mean/Mode Values)", col = 1)
+```

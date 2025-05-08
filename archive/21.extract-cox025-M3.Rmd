@@ -1,0 +1,81 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+#source("./Rfun/summarize_variable.R")
+#source("./Rfun/summarize_data.R")
+#source("./Rfun/check_survival_consistency2.R")
+source("./Rfun/get_newdata_linear_predictor.R")
+source("./Rfun/calculate_survival_probabilities.R")
+source("20.setup_npxdata.txt")
+
+```
+
+```{r unack-cox-0.25M3-Rdata}
+fp = "./validation_input/17-cox-0.25M3.Rdata"
+
+load(fp, verbose=TRUE)
+# Loading objects:
+#  alphax
+#  res_cvfit
+#  res_betas
+#  res_cvtidy
+
+alphax  # = 0.25
+
+names(res_cvfit)
+cvfit = res_cvfit[["ALLx"]] # cv.glmnet class
+lmbda.min = cvfit$lambda.min
+lmbda.1se = cvfit$lambda.1se
+
+sel_lmbda = lmbda.min  # !!! select one lambda
+
+betas = res_betas[["ALLx"]]   # list of vectors(n=958 each)
+names(betas) # [1] "alpha"    "step"     "lambda"   "nzero"    "term"     "estimate" "mincv"    "comment" 
+sel_idx = which(betas$lambda == sel_lmbda)
+step = betas$step[sel_idx]
+term = betas$term[sel_idx] # Character vetor with term names
+estm = betas$estimate[sel_idx]
+cv_betas <- data.frame(term=term, estm =estm)
+cv_betas
+```
+
+* use `cvfit` to return linear predictor for new_data
+```{r create-lin-pred}
+select_vars =c(prot_npx, clin_vars3) #3+21
+new_data = npxdata_all %>% select(all_of(select_vars))
+lin_pred_cvfit = get_newdata_linear_predictor(cvfit, newdata=new_data)
+```
+* Return baseline hazards for selected models
+
+```{r baseline-hazards}
+select_survvars = c(surv_vars, prot_npx, clin_vars3)
+new_data_surv = npxdata_all %>% select(all_of(select_survvars))
+fit1 <- coxph(Surv(time, status) ~ 1 + offset(lin_pred_cvfit), data = new_data_surv)
+
+# Extract baseline cumulative hazard
+base_haz <- basehaz(fit1, centered = FALSE)
+# Baseline hazard increments
+h0 <- diff(c(0, base_haz$hazard))  # Hazard at event times
+event_times <- base_haz$time
+# Output
+bas_hazdf = data.frame(time = event_times, baseline_hazard = h0)
+survival_probs <- calculate_survival_probabilities(lin_pred, bas_hazdf)
+```
+
+
+  

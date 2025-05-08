@@ -1,0 +1,84 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+source("./Rfun/summarize_variable.R")
+source("./Rfun/summarize_data.R")
+source("./Rfun/check_survival_consistency2.R")
+source("20.setup_npxdata.txt")
+load("./validation_input/17-cox-0.25M3.Rdata", verbose=TRUE)
+```
+
+<!-- Section: Original NPX data -->
+
+* Script `r bnm` executed by `r username`.
+
+* Compare `cvfit` with `cvfitx`
+
+# NPX Data: `npx_data_orig`
+
+* Original NPX Data path: `r npx_dtpath`
+
+* `r model_desc`
+
+# `cvfit`
+
+
+Extract `cvfit` from `17-cox-0.25M3.Rdata` external file
+
+```{r extract_cvfit}
+
+cvfit = res_cvfit[["ALLx"]] # cv.glmnet class
+lmbda.min = cvfit$lambda.min
+lmbda.1se = cvfit$lambda.1se
+
+sel_lmbda = lmbda.min  # !!! select one lambda
+
+betas = res_betas[["ALLx"]] # list of vectors(n=958 each)
+names(betas) # [1] "alpha"    "step"     "lambda"   "nzero"    "term"     "estimate" "mincv"    "comment" 
+
+sel_idx = which(betas$lambda == sel_lmbda)
+step = betas$step[sel_idx]
+term = betas$term[sel_idx]
+estm = betas$estimate[sel_idx]
+cbind(term, estm)
+```
+
+# `cvfitx`
+
+Create `cvfitx` manually and compare it to `cvfit`
+
+```{r create-cvfitx}
+foldid = cvfit_auxArgs$foldid
+pen = cvfit_auxArgs$penalty.factor
+Xmtx =  as.matrix(npxdata_all[, names(pen)])
+cvfitx <- cv.glmnet(x = Xmtx, 
+             y = Surv(npxdata_all[["time"]], npxdata_all[["status"]]),
+             family = "cox", 
+             alpha = 0.25, 
+             foldid = foldid,
+             penalty.factor = pen)
+```
+
+```{r extract-betasx}
+lmbda.min = cvfitx$lambda.min
+lmbda.1se = cvfitx$lambda.1se
+
+sel_lmbda = lmbda.min  # !!! select one lambda
+betax_min = coef(cvfitx, lambda= sel_lmbda)
+betax_min
+```

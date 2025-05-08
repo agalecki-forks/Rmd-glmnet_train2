@@ -1,20 +1,16 @@
-## source("20.create_npx-run.R")
-
-
  options(width = 70)
  
 # Clears Global environment
  rm(list=ls())
 
- bnm <-"20.create_npx"   # !!! Basename for Rmd file
- time_horizon <- 10              # Time horizon 10 years ( do not change it)
- survSplit_cut <- 10.1     # 
+ bnm <-"21.extract-cox025-M3"   # !!! Basename for Rmd file
+ survSplit_cut <- 10     # Time horizon 10 years ( do not change it)
  
   # user name
   username <- Sys.getenv("USER")
   if (username == "") username <- Sys.getenv("USERNAME")
   
-  output_postfix = if (username == "agalecki") "_tst" else "" #  substr(username,1,3) #"M3"     # !!!
+  output_postfix = if (username == "agalecki") "_test" else "" # 
   mod_lbl = "M3"          # !!! do not change it
 
 

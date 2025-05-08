@@ -1,12 +1,11 @@
-## source("20.create_npx-run.R")
-
+## source("32.xcheck-cvfit-run.R")
 
  options(width = 70)
  
 # Clears Global environment
  rm(list=ls())
 
- bnm <-"20.create_npx"   # !!! Basename for Rmd file
+ bnm <-"32.xcheck-cvfit"   # !!! Basename for Rmd file
  time_horizon <- 10              # Time horizon 10 years ( do not change it)
  survSplit_cut <- 10.1     # 
  

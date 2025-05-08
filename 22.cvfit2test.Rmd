@@ -1,0 +1,87 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+#source("./Rfun/summarize_variable.R")
+#source("./Rfun/summarize_data.R")
+#source("./Rfun/check_survival_consistency2.R")
+source("./Rfun/get_newdata_linear_predictor.R")
+## source("./Rfun/calculate_survival_probabilities.R")
+source("./Rfun/crr_fg_train.R")
+source("./Rfun/cox_glmnet_train.R")
+source("20.setup_npxdata.txt")
+load("./validation_input/17-cox-0.25M3.Rdata", verbose=TRUE)
+cvfit = res_cvfit[["ALLx"]] # cv.glmnet class
+
+```
+
+Return objects with baseline_cumulative hazards
+
+* Cox with clinical predictors only
+
+```{r create-cum-hazard1-coxph-clin_vars3-test}
+
+# Define predictors and survival variables
+surv_vars <- c("time", "status")
+all_vars <- c(surv_vars, clin_vars3)
+
+# Subset npxdata_all
+data_surv <- npxdata_all %>% select(all_of(all_vars))
+coxph_fit_clin3 <- coxph(Surv(time, status) ~ ., data = data_surv)  # [, clin_vars3])
+bas_cumhazdf <- basehaz(coxph_fit_clin3, centered = FALSE)
+min_haz <- min(bas_cumhazdf$hazard[bas_cumhazdf$hazard > 0]) # Fix zeros, if any
+bas_cumhazdf$hazard[bas_cumhazdf$hazard == 0] <- min_haz
+bas_cumhazdf$hazard <- pmin(bas_cumhazdf$hazard, quantile(bas_cumhazdf$hazard, 0.99)) # Cap outliers
+bas_cumhazdf_clin3  <- bas_cumhazdf
+# rm(bas_cumhazdf_clin3)
+
+coxph_clin3_mdl <-
+  list(fit = coxph_fit_clin3,
+       cumBasHazdf =  bas_cumhazdf
+```
+
+
+
+* `cvfit` loaded
+* create baseline hazard
+
+```{r create-cum-hazard1-cv.glmnet-M3-test}
+
+cvfit_predictors =c(prot_npx, clin_vars3) # 21 + 3 
+surv_vars <- c("time", "status")
+cvfit_predictors <- c(prot_npx, clin_vars3)  # 21 proteomic + 3 clinical
+table(npxdata_all$status)  # Check distribution of 0, 1
+pen  = cvfit_auxArgs$penalty.factor
+foldid = cvfit_auxArgs$foldid
+
+cox_glmnet_result <- cox_glmnet_train(predictors = cvfit_predictors, 
+                                      penalty_factor = pen,
+                                      foldid = foldid,
+                                      verbose = TRUE)
+str(cox_glmnet_result)
+```
+
+* `cox_glmnet_result` list contains the following components:
+cvfit_scaled, bas_cumhazdf, lin_pred, scaling_params 
+
+
+```{r crr-clin-vars3}
+table(npxdata_all$event_type)  # Check distribution of 0, 1, 2
+bas_cumhazdf_crr_clin3 <- crr_fg_train(clin_vars3)
+str(bas_cumhazdf_crr_clin3)
+
+```

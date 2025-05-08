@@ -1,0 +1,72 @@
+---
+title:  "`r paste0(bnm,'.Rmd:')`"
+author: "`r username`"
+date: "`r format(Sys.Date())`"
+output:
+  rmdformats::readthedown:
+    lightbox: true
+    use_bookdown: true
+---
+
+<!-- SETUP  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment="#>")
+```
+
+```{r setup-npx-data, include=FALSE}
+
+#source("./Rfun/summarize_variable.R")
+#source("./Rfun/summarize_data.R")
+#source("./Rfun/check_survival_consistency2.R")
+source("./Rfun/get_newdata_linear_predictor.R")
+## source("./Rfun/calculate_survival_probabilities.R")
+source("./Rfun/crr_fg_train.R")
+source("./Rfun/cox_glmnet_train.R")
+source("20.setup_npxdata.txt")
+
+```
+
+```{r main-chunk}
+# Define predefined predictors
+predefined_allvars <- c(clin_vars3, "BL_eGFR", "B_HBA1C_PRC","log10_DU_ACR", "KIM1.npx", "SYND1.npx",   
+  "WFDC2.npx", "PVRL4.npx" ,"TNF.R2.npx" ,"DLL1.npx","RELT.npx", "LTBR.npx")
+predefined_vars <- predefined_allvars[c(1:3,5)] 
+
+# Assume crr_fit is already fitted with predefined_vars
+# Example: crr_fit <- crr(npxdata_all$time, npxdata_all$status, npxdata_all[, predefined_vars])
+crr_fit <- crr(npxdata_all$event_time, npxdata_all$event_type, npxdata_all[, predefined_vars])
+summary(crr_fit)
+# Create newdata with one row
+newdata <- data.frame(matrix(NA, nrow = 1, ncol = length(predefined_vars)))
+colnames(newdata) <- predefined_vars
+
+# Calculate mean for numeric variables, mode for factors
+if (length(predefined_vars) > 0) {
+  for (var in predefined_vars) {
+    if (var %in% names(npxdata_all)) {
+      if (is.numeric(npxdata_all[[var]])) {
+        # Set to mean for numeric variables
+        newdata[1, var] <- mean(npxdata_all[[var]], na.rm = TRUE)
+      } else if (is.factor(npxdata_all[[var]])) {
+        # Set to most frequent level (mode) for factors
+        mode_val <- names(sort(table(npxdata_all[[var]]), decreasing = TRUE))[1]
+        newdata[1, var] <- factor(mode_val, levels = levels(npxdata_all[[var]]))
+      } else {
+        warning(paste("Variable", var, "is neither numeric nor factor. Setting to NA."))
+        newdata[1, var] <- NA
+      }
+    } else {
+      warning(paste("Variable", var, "not found in npxdata_all. Setting to NA."))
+      newdata[1, var] <- NA
+    }
+  }
+}
+
+# Prepare covariates and predict CIF
+cov1 <- as.matrix(newdata)
+pred <- predict(crr_fit, cov1 = cov1, times = seq(0, max(npxdata_all$time), by = 0.1))
+
+# Plot CIF
+plot(pred, xlab = "Time", ylab = "Cumulative Incidence", main = "CIF for CRR Model (Mean/Mode Values)", col = 1)
+```

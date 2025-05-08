@@ -1,0 +1,3 @@
+set.seed(1234)
+nfolds <-10
+foldid <- sample(1:nfolds, size = nrow(train_data15), replace=TRUE)

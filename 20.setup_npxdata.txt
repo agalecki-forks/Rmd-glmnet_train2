@@ -16,7 +16,7 @@ npx_dtname = "npx_data_example.xlsx"
 # - npx_data  (mvars only)
 # - npx_data_drop_na (complete cases only)
 
-source("./Rfun/all_combinations_crr.R")
+### source("./Rfun/all_combinations_crr.R")
 
 # pacman
 if (!require('pacman')) install.packages('pacman', repos = "http://cran.us.r-project.org")
@@ -32,7 +32,8 @@ pacman::p_load(
   tidyverse,    # data management + ggplot2 graphics 
   janitor,      # adding totals and percents to tables
   flextable,    # format the output table
-  fastcmprsk,   
+  fastcmprsk,
+  gtools,
   gtsummary,    # calculate summary statistics and format the results
   sjPlot,       # correlation matrix
   purrr,        # enhances R functional programming (FP) toolki 
@@ -44,8 +45,10 @@ pacman::p_load(
   survminer,
   survIDINRI,
   penAFT,       #??? utilsag may require it
+  pROC, 
   tidymodels,   #for modeling and machine learning using tidyverse principles
-  survivalROC   #survivalROC
+  survivalROC,  #survivalROC
+  cmprsk
   )
   
 # utilsag
@@ -104,20 +107,13 @@ npx_data_orig <- npx_data_orig  %>%
   
 npx_dt = npx_data_orig %>% rename(time = FU_TIME, status = CASE_CONTROL, time_death =FU_TIME_Death, death = Death ) 
 
-# truncate time_death
+# admin censoring time_death using survSplit_cut
 tm_death <- npx_dt$time_death
 
 npx_dt$time_death = ifelse(is.na(tm_death), survSplit_cut,tm_death)
 npx_dt$time_death = ifelse(npx_dt$time_death > survSplit_cut,survSplit_cut, npx_dt$time_death)
 npx_dt$death      = ifelse(npx_dt$time_death == survSplit_cut, 0, 1)
 
-# Create event_type and event_time variables for competing risks
-npx_dt$event_type <- ifelse(npx_dt$status == 1, 1,          # ESKD occurred
-                            ifelse(npx_dt$death == 1, 2,    # Death occurred (no ESKD)
-                                   0))                      # Censored
-
-npx_dt$event_time <- ifelse(npx_dt$status == 1, npx_dt$time,   # Time to ESKD
-                            npx_dt$time_death)                 # Time to death or censoring
 
 # Create composite outcome variables
 npx_dt$composite_status <- ifelse(npx_dt$status == 1 | npx_dt$death == 1, 1, 0)  # 1 = ESKD or death, 0 = censored
@@ -125,6 +121,9 @@ npx_dt$composite_status <- ifelse(npx_dt$status == 1 | npx_dt$death == 1, 1, 0) 
 npx_dt$composite_time <- ifelse(npx_dt$status == 1, npx_dt$time,                 # Time to ESKD if ESKD occurred
                                 npx_dt$time_death)                               # Time to death or censoring otherwise
 
+npx_dt$event_type = -99
+
+npx_dt$event_time =-999.
 
 # dim(npx_dt) # Number of rows and columns in the input data
 
@@ -150,22 +149,60 @@ if (mod_lbl == "M3") {
     mvars_all <- c("INDEX", surv_vars_add, mvars)
     }
 
-npx_data <- npx_dt  %>% select(all_of(mvars)) # omit?
-
-npx_data_all <- npx_dt  %>% select(all_of(mvars_all)) # added
-
-
-train_npx_data <- npx_data %>% drop_na()      # omit? 
-train_npx_data_all <- npx_data_all %>% drop_na()  # added 
+npx_data0 <- npx_dt  %>% select(all_of(mvars_all)) # omit?
+npx_data1 <- npx_data0 %>% drop_na()
 
 
 # Create data that is censored at `r survSplit_cut` years (prediction horizon)
-# extra varibles are created
-temp <- survSplit(Surv(time,  status) ~ ., data = train_npx_data, cut = survSplit_cut, #
+# extra variables are created
+temp <- survSplit(Surv(time,  status) ~ ., data = npx_data1, cut = survSplit_cut, #
                   episode = "epsd")
-npxdata <- subset(temp, epsd == 1)  # only the first row is kept
+npxdata2 <- subset(temp, epsd == 1)  # only the first row is kept
+npxdata2 <- npxdata2 %>% select(-c(tstart, epsd))
 
-# extra varibles are created
-temp_all <- survSplit(Surv(time,  status) ~ ., data = train_npx_data_all, cut = survSplit_cut, #
+# extra variables are created
+temp_all <- survSplit(Surv(time,  status) ~ ., data = npxdata2, cut = survSplit_cut, #
                   episode = "epsd")
 npxdata_all <- subset(temp_all, epsd == 1)  # only the first row is kept
+npxdata_all <- npxdata_all %>% select(-c(tstart, epsd))
+
+# admin censoring composite_time using survSplit_cut
+tm_cmp <- npxdata_all$composite_time
+
+npxdata_all$composite_time   = ifelse(is.na(tm_cmp), survSplit_cut,tm_cmp)
+npxdata_all$composite_time   = ifelse(npxdata_all$time_death > survSplit_cut,survSplit_cut, npxdata_all$time_death)
+npxdata_all$composite_status = ifelse(npxdata_all$time_death == survSplit_cut, 0, 1)
+
+# Create event_type and event_time variables for competing risks
+npxdata_all$event_type <- ifelse(npxdata_all$status == 1, 1,          # ESKD occurred
+                            ifelse(npxdata_all$death == 1, 2,    # Death occurred (no ESKD)
+                                   0))                      # Censored
+
+npxdata_all$event_time <- ifelse(npxdata_all$status == 1, npxdata_all$time,   # Time to ESKD
+                            npxdata_all$time_death)                 # Time to death or censoring
+
+# cvfit_auxArgs
+
+
+set.seed(1234)
+nfolds =10
+foldid <- sample(1:nfolds, size = nrow(npxdata_all), replace=TRUE)
+predictors <- c(clin_vars3, prot_npx)
+pen <- rep(1, times= length(predictors)) # default penalty =1
+names(pen) <- predictors
+pen[clin_vars3] <- 0
+# penalized proteins
+prot_pen <- c("TNFRSF10A.npx", "LAYN.npx", "EDA2R.npx", "TNFRSF4.npx", "TNFRSF6B.npx", "EPHA2.npx")
+pen[prot_pen] <- 5
+pen
+
+ cvfit_auxArgs <- list(
+    foldid =foldid,
+    penalty.factor= pen)
+    
+rm(pen, prot_pen, foldid, predictors, nfolds)
+
+
+rm(temp_all, npxdata, temp,mvars_all, mvars, uag_ver, uag_ver0, uag_path, surv_vars_all, surv_vars_add, 
+   tvars_sel, tm_death, tm_cmp, sel, tvars_dt0)
+
