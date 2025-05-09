@@ -118,15 +118,15 @@ calibration_table_with_diagnostics <- function(calib_result, cox_glmnet_result, 
 }
 
 # Example usage with your calibration_analysis output
-eval_time <- 10
-table_result <- calibration_table_with_diagnostics(
-  calib_result = tt, 
-  cox_glmnet_result = cox_glmnet_result, 
-  data = npxdata_all, 
-  eval_time = eval_time, 
-  event_vars = c("time", "status")
-)
+#eval_time <- 10
+#table_result <- calibration_table_with_diagnostics(
+#  calib_result = tt, 
+#  cox_glmnet_result = cox_glmnet_result, 
+#  data = npxdata_all, 
+#  eval_time = eval_time, 
+#  event_vars = c("time", "status")
+#)
 
 # Print the table again for reference
-cat("\nCalibration Table:\n")
-print(table_result$calibration_table)
+# cat("\nCalibration Table:\n")
+# print(table_result$calibration_table)

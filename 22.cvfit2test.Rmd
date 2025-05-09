@@ -19,9 +19,13 @@ knitr::opts_chunk$set(echo = TRUE, comment="#>")
 #source("./Rfun/summarize_variable.R")
 #source("./Rfun/summarize_data.R")
 #source("./Rfun/check_survival_consistency2.R")
-source("./Rfun/get_newdata_linear_predictor.R")
+#source("./Rfun/get_newdata_linear_predictor.R")
 ## source("./Rfun/calculate_survival_probabilities.R")
-source("./Rfun/crr_fg_train.R")
+# source("./Rfun/crr_fg_train.R")
+source("./Rfun/calculate_brier_score_cvfit.R")
+source("./Rfun/calibration_analysis.R")
+source("./Rfun/calibration_table_with_diagnostics.R")
+source("./Rfun/compute_nri_idi_single.R")
 source("./Rfun/cox_glmnet_train.R")
 source("20.setup_npxdata.txt")
 load("./validation_input/17-cox-0.25M3.Rdata", verbose=TRUE)
@@ -51,7 +55,7 @@ bas_cumhazdf_clin3  <- bas_cumhazdf
 
 coxph_clin3_mdl <-
   list(fit = coxph_fit_clin3,
-       cumBasHazdf =  bas_cumhazdf
+       cumBasHazdf =  bas_cumhazdf)
 ```
 
 
@@ -79,9 +83,171 @@ str(cox_glmnet_result)
 cvfit_scaled, bas_cumhazdf, lin_pred, scaling_params 
 
 
-```{r crr-clin-vars3}
+```{r crr-clin-vars3,eval=FALSE, echo=FALSE}
+# CHUNK SKIPPED
 table(npxdata_all$event_type)  # Check distribution of 0, 1, 2
 bas_cumhazdf_crr_clin3 <- crr_fg_train(clin_vars3)
 str(bas_cumhazdf_crr_clin3)
+
+```
+
+# Brier score
+
+```{r brier-score}
+eval_time <- 10  # Evaluate Brier score at t=10
+brier_score <- calculate_brier_score(cox_glmnet_result = cox_glmnet_result, 
+                                     data = npxdata_all, 
+                                     eval_time = eval_time, 
+                                     event_vars = c("time", "status"))
+cat("Brier score at time", eval_time, ":", brier_score, "\n")
+```
+
+##  Diagnostic output
+* Diagnostic output for brier sore
+
+```{r brier-Diagnostic-output}
+lin_pred <- cox_glmnet_result$lin_pred
+surv_prob <- exp(-approx(cox_glmnet_result$bas_cumhazdf$time, 
+                         cox_glmnet_result$bas_cumhazdf$hazard, 
+                         xout = eval_time, method = "linear")$y * exp(lin_pred))
+cat("Range of lin_pred:", range(lin_pred, na.rm = TRUE), "\n")
+cat("Number of unique survival probabilities:", length(unique(surv_prob)), "\n")
+summary(surv_prob)
+
+```
+
+# Calibration
+
+## Calibration (excld = TRUE)
+
+### Analysis(1)
+
+```{r calibration-analysis}
+# Example usage
+eval_time <- 10
+tt1 <- calibration_analysis(cox_glmnet_result = cox_glmnet_result, 
+                           data = npxdata_all, 
+                           eval_time = eval_time, 
+                           event_vars = c("time", "status"), 
+                           n_bins = 10, 
+                           clip_value = 1e-3, 
+                           exclude_extremes = TRUE)
+cat("Calibration Slope:", tt1$calib_slope, "\n")
+cat("Calibration Intercept:", tt1$calib_intercept, "\n")
+cat("Standard Error (Slope):", tt1$se_slope, "\n")
+cat("Standard Error (Intercept):", tt1$se_intercept, "\n")
+cat("Slope 95% CI:", tt1$ci_slope[1], "to", tt1$ci_slope[2], "\n")
+cat("Intercept 95% CI:", tt1$ci_intercept[1], "to", tt1$ci_intercept[2], "\n")
+if (!is.null(tt1$calibration_data)) {
+  print(tt1$calibration_data)
+}
+# plot(calib_data$mean_pred, calib_data$obs_surv ...
+
+```
+### Diagnostics Table (1)
+
+Example usage with calibration_analysis output:
+
+```{r calibration-table-with-diagnostics} 
+eval_time <- 10
+table_result1 <- calibration_table_with_diagnostics(
+  calib_result = tt1, 
+  cox_glmnet_result = cox_glmnet_result, 
+  data = npxdata_all, 
+  eval_time = eval_time, 
+  event_vars = c("time", "status")
+)
+
+# Print the table again for reference
+cat("\nCalibration Table:\n")
+print(table_result1$calibration_table)
+#rm(tt1,table_result1)
+
+```
+
+## Calibration (excld = FALSE)
+
+### Analysis(2)
+
+```{r calibration-analysis2}
+# Example usage
+eval_time <- 10
+tt2 <- calibration_analysis(cox_glmnet_result = cox_glmnet_result, 
+                           data = npxdata_all, 
+                           eval_time = eval_time, 
+                           event_vars = c("time", "status"), 
+                           n_bins = 10, 
+                           clip_value = 1e-3, 
+                           exclude_extremes = FALSE)
+cat("Calibration Slope:", tt2$calib_slope, "\n")
+cat("Calibration Intercept:", tt2$calib_intercept, "\n")
+cat("Standard Error (Slope):", tt2$se_slope, "\n")
+cat("Standard Error (Intercept):", tt2$se_intercept, "\n")
+cat("Slope 95% CI:", tt2$ci_slope[1], "to", tt2$ci_slope[2], "\n")
+cat("Intercept 95% CI:", tt2$ci_intercept[1], "to", tt2$ci_intercept[2], "\n")
+if (!is.null(tt2$calibration_data)) {
+  print(tt2$calibration_data)
+}
+# plot(calib_data$mean_pred, calib_data$obs_surv ...
+
+```
+### Diagnostics Table (2)
+
+Example usage with calibration_analysis output:
+
+```{r calibration-table-with-diagnostics2} 
+eval_time <- 10
+table_result2 <- calibration_table_with_diagnostics(
+  calib_result = tt2, 
+  cox_glmnet_result = cox_glmnet_result, 
+  data = npxdata_all, 
+  eval_time = eval_time, 
+  event_vars = c("time", "status")
+)
+
+# Print the table again for reference
+cat("\nCalibration Table:\n")
+print(table_result2$calibration_table)
+# rm(tt2,table_result2)
+
+```
+
+# NRI/IDI
+
+
+## Single (excld=TRUE)
+
+```{r IDI-NRI1}
+recalb1 = list(slope = tt1$calib_slope, intercept= tt1$calib_intercept)
+recalb1
+single_result1 <- compute_nri_idi_single(
+  new_model_result = cox_glmnet_result,
+  clin_vars = clin_vars3,
+  biomarker_vars = prot_npx, # biomarkers,
+  data = npxdata_all,
+  eval_time = eval_time,
+  event_vars = c("time", "status"),
+  recalibrate = recalb1    # list(slope = 2.444079, intercept = 1.756214)
+ )
+
+```
+
+## Single (excld=FALSE)
+
+```{r IDI-NRI2}
+recalb2 = list(slope = tt2$calib_slope, intercept= tt2$calib_intercept)
+recalb2
+single_result2 <- compute_nri_idi_single(
+  new_model_result = cox_glmnet_result,
+  clin_vars = clin_vars3,
+  biomarker_vars = prot_npx, # biomarkers,
+  data = npxdata_all,
+  eval_time = eval_time,
+  event_vars = c("time", "status"),
+  recalibrate = recalb2    # list(slope = 2.444079, intercept = 1.756214)
+ )
+#cat("IDI:", idi_result$point$IDI[1,1], "\n")
+#cat("NRI:", idi_result$point$TXI[1], "\n")
+# Removed: print(idi_result)
 
 ```

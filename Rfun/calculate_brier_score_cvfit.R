@@ -61,19 +61,19 @@ calculate_brier_score <- function(cox_glmnet_result, data, eval_time, event_vars
   return(brier_score)
 }
 
-# Example usage
-eval_time <- 10  # Evaluate Brier score at t=10
-brier_score <- calculate_brier_score(cox_glmnet_result = cox_glmnet_result, 
-                                     data = npxdata_all, 
-                                     eval_time = eval_time, 
-                                     event_vars = c("time", "status"))
-cat("Brier score at time", eval_time, ":", brier_score, "\n")
+# -- Example usage
+#eval_time <- 10  # Evaluate Brier score at t=10
+#brier_score <- calculate_brier_score(cox_glmnet_result = cox_glmnet_result, 
+#                                     data = npxdata_all, 
+#                                     eval_time = eval_time, 
+#                                     event_vars = c("time", "status"))
+#cat("Brier score at time", eval_time, ":", brier_score, "\n")
 
 # Diagnostic output
-lin_pred <- cox_glmnet_result$lin_pred
-surv_prob <- exp(-approx(cox_glmnet_result$bas_cumhazdf$time, 
-                         cox_glmnet_result$bas_cumhazdf$hazard, 
-                         xout = eval_time, method = "linear")$y * exp(lin_pred))
-cat("Range of lin_pred:", range(lin_pred, na.rm = TRUE), "\n")
-cat("Number of unique survival probabilities:", length(unique(surv_prob)), "\n")
-summary(surv_prob)
+#lin_pred <- cox_glmnet_result$lin_pred
+#surv_prob <- exp(-approx(cox_glmnet_result$bas_cumhazdf$time, 
+#                         cox_glmnet_result$bas_cumhazdf$hazard, 
+#                         xout = eval_time, method = "linear")$y * exp(lin_pred))
+#cat("Range of lin_pred:", range(lin_pred, na.rm = TRUE), "\n")
+#cat("Number of unique survival probabilities:", length(unique(surv_prob)), "\n")
+# summary(surv_prob)

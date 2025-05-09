@@ -211,22 +211,22 @@ calibration_analysis <- function(cox_glmnet_result, data, eval_time, event_vars 
               ci_intercept = ci_intercept))
 }
 
-# Example usage
-eval_time <- 10
-tt <- calibration_analysis(cox_glmnet_result = cox_glmnet_result, 
-                           data = npxdata_all, 
-                           eval_time = eval_time, 
-                           event_vars = c("time", "status"), 
-                           n_bins = 10, 
-                           clip_value = 1e-3, 
-                           exclude_extremes = TRUE)
-cat("Calibration Slope:", tt$calib_slope, "\n")
-cat("Calibration Intercept:", tt$calib_intercept, "\n")
-cat("Standard Error (Slope):", tt$se_slope, "\n")
-cat("Standard Error (Intercept):", tt$se_intercept, "\n")
-cat("Slope 95% CI:", tt$ci_slope[1], "to", tt$ci_slope[2], "\n")
-cat("Intercept 95% CI:", tt$ci_intercept[1], "to", tt$ci_intercept[2], "\n")
-if (!is.null(tt$calibration_data)) {
-  print(tt$calibration_data)
-}
+#--- Example usage
+#eval_time <- 10
+#tt <- calibration_analysis(cox_glmnet_result = cox_glmnet_result, 
+#                           data = npxdata_all, 
+#                           eval_time = eval_time, 
+#                           event_vars = c("time", "status"), 
+#                           n_bins = 10, 
+#                           clip_value = 1e-3, 
+#                           exclude_extremes = TRUE)
+#cat("Calibration Slope:", tt$calib_slope, "\n")
+#cat("Calibration Intercept:", tt$calib_intercept, "\n")
+#cat("Standard Error (Slope):", tt$se_slope, "\n")
+#cat("Standard Error (Intercept):", tt$se_intercept, "\n")
+#cat("Slope 95% CI:", tt$ci_slope[1], "to", tt$ci_slope[2], "\n")
+#cat("Intercept 95% CI:", tt$ci_intercept[1], "to", tt$ci_intercept[2], "\n")
+#if (!is.null(tt$calibration_data)) {
+#  print(tt$calibration_data)
+#}
 # plot(calib_data$mean_pred, calib_data$obs_surv ...
