@@ -249,5 +249,16 @@ single_result2 <- compute_nri_idi_single(
 #cat("IDI:", idi_result$point$IDI[1,1], "\n")
 #cat("NRI:", idi_result$point$TXI[1], "\n")
 # Removed: print(idi_result)
+# idi_res2 = single_result2$idi_result
+# str(idi_res2)
 
+```
+
+# Save
+
+```{r save-results}
+onms = c("tt1", "table_result1",  "tt2", "table_result2", "single_result1",
+    "single_result2")
+outpath = paste0("./validation_save/22.cvfit2test.Rdata")
+save(file=outpath, list = onms)
 ```
