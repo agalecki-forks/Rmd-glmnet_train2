@@ -117,7 +117,9 @@ knitr::kable(summary_stats, caption = "Summary Statistics for npxdata_all data")
 
 ## Time vars check
 
-* Check time vars in `npxdata_all` data for consistency
+* Check time vars in `npxdata_all` data using `check_survival_consistency2()` function for consistency
+
+* `miss_res2$problematic_rows` should be empty
 
 ```{r check2-npxdata_all}
                           
@@ -127,16 +129,24 @@ miss_res2 =check_survival_consistency2(data=npxdata_all,
                           status_var = "status", 
                           time_death_var = "time_death", 
                           death_var = "death")
-#summ2_list= miss_res2$summary
-#miss_summ2 <- data.frame(Value = unlist(summ2_list))
-#miss_summ2
-
-#miss_res2$issues
 miss_res2$problematic_rows
 ```
 
 
 <!-- Time vars -->
+
+## Time vars (for artificial data)
+
+Column names'  abbreviations:
+
+* `time`
+* `stt` for `status`
+* `tmdth` for `time_death`
+* `dth` for `death`
+* `etime` for `event_time`
+* `etp` for `event_type`  0/1/2
+* `cmp_tm` for `composite_time`
+* `cmp_stt` for `composite_status`
 
 ```{r tvars_dt}
 if (username == "agalecki"){
@@ -146,7 +156,6 @@ if (username == "agalecki"){
      stt=status, etp = event_type)       
   cols_to_round <- c("time", "tmdth", "etime","cmp_tm")
   tvars_dt[, cols_to_round] <- lapply(tvars_dt[, cols_to_round], round, digits = 2)
-
   print(tvars_dt)
 }
 ```

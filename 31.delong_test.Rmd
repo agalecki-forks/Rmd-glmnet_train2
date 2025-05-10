@@ -60,6 +60,7 @@ if (length(selected_proteins) != 8) {
 # Ensure no missing data
 npxdata_all <- npxdata_all %>% 
   filter(complete.cases(.))  # Remove rows with NA
+dim(npxdata_all)
 
 # Define survival outcome
 surv_obj <- Surv(npxdata_all$time, npxdata_all$status)
@@ -206,7 +207,7 @@ dev.off()
 
 # --- Save Results ---
 fout = "./Validation_save/"
-write.csv(results_table, paste0(fout, "31.delomg_test_predictive_comparison_results",output_postfix , ".csv"), row.names = FALSE)
+write.csv(results_table, paste0(fout, "31.delong_test_predictive_comparison_results",output_postfix , ".csv"), row.names = FALSE)
 
 # --- Notes for Manuscript ---
 cat("
