@@ -6,12 +6,15 @@
 *.html
 *.Rdata
 *.xlsx
+*.pdf
+
 commit_history.txt
 
 # .Rprog
 *.Rprog
 save/*.Rdata
 save/*.rds
+Validation_save/*
 
 # History files
 .Rhistory
