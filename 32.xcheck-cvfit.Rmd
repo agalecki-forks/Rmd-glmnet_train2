@@ -55,7 +55,9 @@ sel_idx = which(betas$lambda == sel_lmbda)
 step = betas$step[sel_idx]
 term = betas$term[sel_idx]
 estm = betas$estimate[sel_idx]
-cbind(term, estm)
+cvfit_betas = data.frame(term =term, estm= estm)
+#cbind(term, estm)
+cvfit_betas
 ```
 
 # `cvfitx`
