@@ -95,37 +95,52 @@ model_desc = get_model_desc(mod_lbl)
 # `status` (0/1) variable, originally named `CASE_CONTROL`, is coded 0 for Controls (i.e., ESKD event has not occurred), and 1 for Cases (i.e., event has occurred)
 #read the data that is stored under the `validation_input` folder
 
-
-
 # Change the filename below, if needed
 
 npx_dtpath <- paste0("./Data/", npx_dtname)
 npx_data_orig <- read_excel(npx_dtpath)
 
+cumx <- list()
+
 npx_data_orig <- npx_data_orig  %>% 
   mutate(log10_DU_ACR = log10(DU_ACR))  %>% filter(FU_TIME>0) %>% filter(BL_eGFR >= 45)
+
+tt <- dim(npx_data_orig)
+cumx <- c(cumx, list(S01dim.npx_data_orig =tt))
   
 npx_dt = npx_data_orig %>% rename(time = FU_TIME, status = CASE_CONTROL, time_death =FU_TIME_Death, death = Death ) 
+tt <- dim(npx_dt)
+cumx <- c(cumx, list(S02dim.npx_dt =  tt))
+
 
 # admin censoring time_death using survSplit_cut
 tm_death <- npx_dt$time_death
-
+cumx <- c(cumx, list(S03range.npx_dt_tm_death = range(tm_death)))
 npx_dt$time_death = ifelse(is.na(tm_death), survSplit_cut,tm_death)
 npx_dt$time_death = ifelse(npx_dt$time_death > survSplit_cut,survSplit_cut, npx_dt$time_death)
 npx_dt$death      = ifelse(npx_dt$time_death == survSplit_cut, 0, 1)
 
+tt <- range(npx_dt$time_death)
+cumx <- c(cumx, list(S04range.npx_dt.time_death =tt))
 
 # Create composite outcome variables
 npx_dt$composite_status <- ifelse(npx_dt$status == 1 | npx_dt$death == 1, 1, 0)  # 1 = ESKD or death, 0 = censored
 
+tt <- range('npx_dt$composite_status')
+cumx <- c(cumx, list(S05range.npx_dt.composite_status=tt))
 npx_dt$composite_time <- ifelse(npx_dt$status == 1, npx_dt$time,                 # Time to ESKD if ESKD occurred
                                 npx_dt$time_death)                               # Time to death or censoring otherwise
 
+tt = range(npx_dt$composite_time) 
+cumx = c(cumx, list(S06range.npx_dt.composite_time =tt)) 
 npx_dt$event_type = -99
 
 npx_dt$event_time =-999.
 
-# dim(npx_dt) # Number of rows and columns in the input data
+
+
+tt = dim(npx_dt) # Number of rows and columns in the input data
+cumx = c(cumx, list(S07dim.npx_dt=tt))
 
 #   Variables-used-Cox
 prot_npx <- c("KIM1.npx","SYND1.npx","IL.1RT1.npx",   "WFDC2.npx", "CD27.npx",
@@ -149,37 +164,76 @@ if (mod_lbl == "M3") {
     mvars_all <- c("INDEX", surv_vars_add, mvars)
     }
 
+
 npx_data0 <- npx_dt  %>% select(all_of(mvars_all)) # omit?
+tt = dim(npx_data0)
+cumx = c(cumx, list(S09dim.npx_data0=tt))
+
 npx_data1 <- npx_data0 %>% drop_na()
+tt = dim(npx_data1)
+cumx = c(cumx, list(S10dim.npx_data1=tt))
+
 
 
 # Create data that is censored at `r survSplit_cut` years (prediction horizon)
 # extra variables are created
 temp <- survSplit(Surv(time,  status) ~ ., data = npx_data1, cut = survSplit_cut, #
                   episode = "epsd")
+tt = dim(temp)
+cumx = c(cumx, list(S11dim.temp=tt))
+
 npxdata2 <- subset(temp, epsd == 1)  # only the first row is kept
+tt = dim(npxdata2)
+cumx = c(cumx, list(S12dim.npxdata2=tt))
+
 npxdata2 <- npxdata2 %>% select(-c(tstart, epsd))
+tt = dim(npxdata2)
+cumx = c(cumx, list(S13dim.npxdata2=tt))
+
 
 # extra variables are created
 temp_all <- survSplit(Surv(time,  status) ~ ., data = npxdata2, cut = survSplit_cut, #
                   episode = "epsd")
+tt = dim(temp_all)
+cumx = c(cumx, list(S14dim.temp_all = tt))
+
 npxdata_all <- subset(temp_all, epsd == 1)  # only the first row is kept
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S15dim.npxdata_all=tt))
 npxdata_all <- npxdata_all %>% select(-c(tstart, epsd))
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S16dim.npxdata_all=tt))
 
 # admin censoring composite_time using survSplit_cut
 tm_cmp <- npxdata_all$composite_time
-
+tt = length(tm_cmp)
+cumx = c(cumx, list(S17len.tm_cmp=tt))
 npxdata_all$composite_time   = ifelse(is.na(tm_cmp), survSplit_cut,tm_cmp)
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S18dim.npxdata_all=tt))
+
 npxdata_all$composite_time   = ifelse(npxdata_all$time_death > survSplit_cut,survSplit_cut, npxdata_all$time_death)
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S19dim.npxdata_all=tt))
+
 npxdata_all$composite_status = ifelse(npxdata_all$time_death == survSplit_cut, 0, 1)
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S20dim.npxdata_all=tt))
+
 
 # Create event_type and event_time variables for competing risks
 npxdata_all$event_type <- ifelse(npxdata_all$status == 1, 1,          # ESKD occurred
                             ifelse(npxdata_all$death == 1, 2,    # Death occurred (no ESKD)
                                    0))                      # Censored
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S21dim.npxdata_all=tt))
+
 
 npxdata_all$event_time <- ifelse(npxdata_all$status == 1, npxdata_all$time,   # Time to ESKD
                             npxdata_all$time_death)                 # Time to death or censoring
+tt = dim(npxdata_all)
+cumx = c(cumx, list(S22dim.npxdata_all=tt))
+
 
 # cvfit_auxArgs
 
@@ -200,8 +254,14 @@ pen
     foldid =foldid,
     penalty.factor= pen)
     
+ tt = cvfit_auxArgs
+ cumx =c(cumx, list( cvfit_auxArgs =  cvfit_auxArgs))
+    
 rm(pen, prot_pen, foldid, predictors, nfolds)
 
+cumxPath = paste0("./Validation_save/", bnm, "-cumx.Rdata")
+save(cumx, file=cumxPath)
+rm(cumxPath,cumx)
 
 rm(temp_all, npxdata, temp,mvars_all, mvars, uag_ver, uag_ver0, uag_path, surv_vars_all, surv_vars_add, 
    tvars_sel, tm_death, tm_cmp, sel, tvars_dt0)
